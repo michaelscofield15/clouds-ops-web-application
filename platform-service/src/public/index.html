@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudOps — Autonomous Multi-Tenant Cloud DevOps SaaS Platform</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="saas-body">
+  <div class="saas-layout">
+    <!-- Collapsible Sidebar Navigation -->
+    <aside class="saas-sidebar" id="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">⚡</div>
+        <div class="brand-meta">
+          <span class="brand-title">CloudOps</span>
+          <span class="brand-tag">SaaS Control Plane</span>
+        </div>
+      </div>
+
+      <!-- Tenant Organization Selector Card -->
+      <div class="tenant-selector-card" id="sidebar-tenant-card">
+        <div class="tenant-icon">🏢</div>
+        <div class="tenant-info">
+          <span class="tenant-label">Current Tenant</span>
+          <strong class="tenant-name" id="sidebar-org-name">No Organization</strong>
+        </div>
+        <span class="tenant-role-badge" id="sidebar-role-badge">GUEST</span>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">PLATFORM CONTROL</div>
+        <button type="button" class="nav-item active" data-view="overview">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Overview</span>
+        </button>
+        <button type="button" class="nav-item" data-view="projects">
+          <span class="nav-icon">📁</span>
+          <span class="nav-label">Projects</span>
+          <span class="nav-badge" id="nav-project-count">0</span>
+        </button>
+        <button type="button" class="nav-item" data-view="deployments">
+          <span class="nav-icon">🚀</span>
+          <span class="nav-label">Deployments</span>
+        </button>
+        <button type="button" class="nav-item" data-view="upload">
+          <span class="nav-icon">📦</span>
+          <span class="nav-label">Upload Application</span>
+          <span class="nav-badge-pill">Core</span>
+        </button>
+
+        <div class="nav-section-title">INFRASTRUCTURE & RUNTIMES</div>
+        <button type="button" class="nav-item" data-view="infrastructure">
+          <span class="nav-icon">☁️</span>
+          <span class="nav-label">Infrastructure (AWS)</span>
+        </button>
+        <button type="button" class="nav-item" data-view="terraform">
+          <span class="nav-icon">🏗️</span>
+          <span class="nav-label">Terraform IaC</span>
+        </button>
+        <button type="button" class="nav-item" data-view="docker">
+          <span class="nav-icon">🐳</span>
+          <span class="nav-label">Docker Engines</span>
+        </button>
+        <button type="button" class="nav-item" data-view="cicd">
+          <span class="nav-icon">🔄</span>
+          <span class="nav-label">CI/CD (GitHub & Jenkins)</span>
+        </button>
+        <button type="button" class="nav-item" data-view="kubernetes">
+          <span class="nav-icon">☸️</span>
+          <span class="nav-label">Kubernetes</span>
+        </button>
+
+        <div class="nav-section-title">OBSERVABILITY & SECURITY</div>
+        <button type="button" class="nav-item" data-view="observability">
+          <span class="nav-icon">📈</span>
+          <span class="nav-label">Observability</span>
+        </button>
+        <button type="button" class="nav-item" data-view="self-healing">
+          <span class="nav-icon">🛡️</span>
+          <span class="nav-label">Self-Healing</span>
+          <span class="nav-status-dot dot-active" title="Protection Active"></span>
+        </button>
+        <button type="button" class="nav-item" data-view="connections">
+          <span class="nav-icon">🔗</span>
+          <span class="nav-label">Connections</span>
+        </button>
+        <button type="button" class="nav-item" data-view="audit-logs">
+          <span class="nav-icon">📜</span>
+          <span class="nav-label">Audit Logs</span>
+        </button>
+        <button type="button" class="nav-item" data-view="settings">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Settings & Team</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer User Profile -->
+      <div class="sidebar-user-footer">
+        <div class="user-avatar" id="sidebar-user-avatar">👤</div>
+        <div class="user-meta">
+          <strong class="user-name" id="sidebar-user-name">Guest User</strong>
+          <span class="user-email" id="sidebar-user-email">Not signed in</span>
+        </div>
+        <button type="button" id="btn-sidebar-logout" class="icon-btn" title="Sign In">🔑</button>
+      </div>
+    </aside>
+
+    <!-- Main Content Container -->
+    <div class="saas-main">
+      <!-- Top Application Header Bar -->
+      <header class="saas-topbar">
+        <div class="topbar-left">
+          <button type="button" id="sidebar-toggle-btn" class="icon-btn mobile-only">☰</button>
+          <div class="active-view-meta">
+            <h2 id="topbar-view-title">Platform Overview</h2>
+            <span class="topbar-crumb" id="topbar-view-crumb">Dashboard / Guest Session</span>
+          </div>
+        </div>
+
+        <div class="topbar-center">
+          <div class="global-search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="global-search-input" placeholder="Search projects, deployments, resources, audit events..." />
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="active-project-picker">
+            <span class="picker-label">Active Project:</span>
+            <select id="global-project-select" class="saas-select">
+              <option value="">No Active Project</option>
+            </select>
+          </div>
+
+          <div id="auth-buttons-group">
+            <button type="button" id="btn-topbar-login" class="btn btn-secondary btn-sm">Login</button>
+            <button type="button" id="btn-topbar-signup" class="btn btn-primary btn-sm">Sign Up</button>
+          </div>
+
+          <div id="tenant-badges-group" class="topbar-badges hidden">
+            <span class="status-badge badge-tenant" id="topbar-org-badge">🏢 No Organization</span>
+            <span class="status-badge badge-role" id="topbar-role-badge">GUEST</span>
+            <button type="button" id="btn-quick-deploy" class="btn btn-primary btn-sm">⚡ New Deployment</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <main class="view-content-wrapper">
+        <!-- Notification Banner Container -->
+        <div id="notification-area" class="notification-area"></div>
+
+        <!-- 1. VIEW: OVERVIEW -->
+        <section class="view-panel active" id="view-overview">
+          <div class="view-header">
+            <div>
+              <h3>Autonomous CloudOps Dashboard</h3>
+              <p class="section-desc">Real-time status of multi-tenant infrastructure, active deployments, and automated self-healing loops.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-overview">🔄 Refresh Overview</button>
+            </div>
+          </div>
+
+          <!-- Top Metric Cards -->
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="metric-icon-wrap icon-blue">📦</div>
+              <div class="metric-data">
+                <span class="metric-label">Ingested Projects</span>
+                <strong class="metric-value" id="metric-projects-count">0</strong>
+                <span class="metric-subtext">Tenant isolated</span>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon-wrap icon-emerald">🚀</div>
+              <div class="metric-data">
+                <span class="metric-label">Active Deployments</span>
+                <strong class="metric-value" id="metric-deployments-count">0</strong>
+                <span class="metric-subtext">AWS EC2 / EKS Live</span>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon-wrap icon-amber">🛡️</div>
+              <div class="metric-data">
+                <span class="metric-label">Self-Healing Incidents</span>
+                <strong class="metric-value" id="metric-incidents-count">0</strong>
+                <span class="metric-subtext">Auto-Remediated</span>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon-wrap icon-purple">🔗</div>
+              <div class="metric-data">
+                <span class="metric-label">Connected Providers</span>
+                <strong class="metric-value" id="metric-connections-count">0 / 5</strong>
+                <span class="metric-subtext">Vault Encrypted</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Cloud Infrastructure Quick Glance -->
+          <div class="grid-2-col" style="margin-top: 1.5rem;">
+            <div class="card">
+              <div class="card-title-bar">
+                <h4>☁️ Verified Cloud Endpoint</h4>
+                <span class="status-badge badge-warning" id="overview-live-status">NOT PROVISIONED</span>
+              </div>
+              <div class="details-table-wrap">
+                <table class="saas-table">
+                  <tbody>
+                    <tr>
+                      <td>Target Cloud</td>
+                      <td><strong id="overview-cloud-region">Amazon Web Services (ap-south-1)</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Account Identity</td>
+                      <td><code class="code-pill" id="overview-aws-account">NOT CONNECTED</code></td>
+                    </tr>
+                    <tr>
+                      <td>Compute Instance</td>
+                      <td><code class="code-pill" id="overview-ec2-id">No active instance</code></td>
+                    </tr>
+                    <tr>
+                      <td>Public Endpoint</td>
+                      <td><a href="javascript:void(0)" target="_blank" class="live-url-link" id="overview-endpoint-link" style="color: var(--text-muted);">None</a></td>
+                    </tr>
+                    <tr>
+                      <td>Health Status</td>
+                      <td><span class="status-badge badge-warning" id="overview-health-badge">IDLE / READY</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title-bar">
+                <h4>🛡️ Self-Healing Circuit Status</h4>
+                <span class="status-badge badge-success">PROTECTION ARMED</span>
+              </div>
+              <div class="status-callout callout-info">
+                <p><strong>Safe Automated Recovery Loop:</strong> Synthetic health probes execute every 15s. Automatic container restarts trigger with exponential backoff on crashloop. Zero destructive changes without explicit approval.</p>
+              </div>
+              <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="App.navigateTo('self-healing')">View Incident Log</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="App.navigateTo('observability')">Open Metrics</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Action Workflows -->
+          <div class="card" style="margin-top: 1.5rem;">
+            <h4>⚡ Quick Workflows</h4>
+            <div class="quick-action-grid">
+              <div class="action-card" onclick="App.navigateTo('upload')">
+                <span class="action-icon">📦</span>
+                <strong>Upload & Ingest ZIP</strong>
+                <p>Drag & drop project archive for automated runtime detection & Dockerization.</p>
+              </div>
+              <div class="action-card" onclick="App.navigateTo('connections')">
+                <span class="action-icon">🔗</span>
+                <strong>Manage Cloud Providers</strong>
+                <p>Connect AWS STS, GitHub PAT, Jenkins API, Terraform CLI & Kubernetes.</p>
+              </div>
+              <div class="action-card" onclick="App.navigateTo('terraform')">
+                <span class="action-icon">🏗️</span>
+                <strong>Run Terraform IaC Plan</strong>
+                <p>Inspect tenant HCL infrastructure code and execute isolated state apply.</p>
+              </div>
+              <div class="action-card" onclick="App.navigateTo('audit-logs')">
+                <span class="action-icon">📜</span>
+                <strong>Security Audit Trail</strong>
+                <p>Inspect cryptographic tenant action logs and compliance records.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. VIEW: PROJECTS -->
+        <section class="view-panel" id="view-projects">
+          <div class="view-header">
+            <div>
+              <h3>Ingested Tenant Projects</h3>
+              <p class="section-desc">Projects analyzed, containerized, and managed within your isolated workspace.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-primary btn-sm" onclick="App.navigateTo('upload')">📦 Upload New Project</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-projects">🔄 Refresh</button>
+            </div>
+          </div>
+
+          <div id="projects-list-container" class="projects-grid">
+            <div class="empty-state-card">
+              <span class="empty-icon">📁</span>
+              <h4>No projects in this workspace yet</h4>
+              <p>Upload your application ZIP to run autonomous analysis and deployment.</p>
+              <button type="button" class="btn btn-primary" onclick="App.navigateTo('upload')">Upload First Application</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. VIEW: DEPLOYMENTS -->
+        <section class="view-panel" id="view-deployments">
+          <div class="view-header">
+            <div>
+              <h3>Deployment Pipeline & Orchestration</h3>
+              <p class="section-desc">8-Stage Autonomous Deployment Lifecycle with Real-Time Progress and RCA Diagnostics.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-deployments">🔄 Refresh Status</button>
+            </div>
+          </div>
+
+          <!-- 8-Stage Pipeline Visualization -->
+          <div class="card">
+            <div class="card-title-bar">
+              <h4>Deployment Pipeline Timeline</h4>
+              <span class="status-badge badge-info" id="pipeline-overall-status">IDLE / READY</span>
+            </div>
+
+            <div class="pipeline-stepper" id="pipeline-stepper-container">
+              <div class="step-node completed" id="step-1">
+                <div class="step-circle">1</div>
+                <div class="step-details">
+                  <strong>Ingestion</strong>
+                  <span>SHA-256 Checksum</span>
+                </div>
+              </div>
+              <div class="step-connector completed"></div>
+              <div class="step-node completed" id="step-2">
+                <div class="step-circle">2</div>
+                <div class="step-details">
+                  <strong>Analysis</strong>
+                  <span>Runtime Detect</span>
+                </div>
+              </div>
+              <div class="step-connector completed"></div>
+              <div class="step-node completed" id="step-3">
+                <div class="step-circle">3</div>
+                <div class="step-details">
+                  <strong>Dockerize</strong>
+                  <span>Multi-Stage Build</span>
+                </div>
+              </div>
+              <div class="step-connector completed"></div>
+              <div class="step-node completed" id="step-4">
+                <div class="step-circle">4</div>
+                <div class="step-details">
+                  <strong>CI/CD Sync</strong>
+                  <span>Git & Jenkins</span>
+                </div>
+              </div>
+              <div class="step-connector completed"></div>
+              <div class="step-node completed" id="step-5">
+                <div class="step-circle">5</div>
+                <div class="step-details">
+                  <strong>Terraform</strong>
+                  <span>IaC Provisioning</span>
+                </div>
+              </div>
+              <div class="step-connector completed"></div>
+              <div class="step-node completed" id="step-6">
+                <div class="step-circle">6</div>
+                <div class="step-details">
+                  <strong>AWS Deploy</strong>
+                  <span>EC2 & SSM Agent</span>
+                </div>
+              </div>
+              <div class="step-connector completed"></div>
+              <div class="step-node completed" id="step-7">
+                <div class="step-circle">7</div>
+                <div class="step-details">
+                  <strong>Health Probe</strong>
+                  <span>HTTP 200 Verify</span>
+                </div>
+              </div>
+              <div class="step-connector completed"></div>
+              <div class="step-node active" id="step-8">
+                <div class="step-circle">8</div>
+                <div class="step-details">
+                  <strong>Observability</strong>
+                  <span>Self-Healing Loop</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Permanent Current Live Application Card -->
+          <div class="card" id="card-live-application" style="border-left: 4px solid #10b981; margin-bottom: 1.5rem;">
+            <div class="card-title-bar">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.5rem;">🟢</span>
+                <div>
+                  <h4 style="margin: 0; font-weight: 700; color: #10b981;">CURRENT LIVE APPLICATION</h4>
+                  <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Active verified production deployment running on AWS cloud infrastructure</p>
+                </div>
+              </div>
+              <span class="status-badge badge-success" id="live-app-status-badge">LIVE &amp; HEALTHY</span>
+            </div>
+
+            <div id="live-app-details-container" style="margin-top: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 1rem 1.25rem;">
+                <div>
+                  <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; display: block;">Production Live URL:</span>
+                  <a href="javascript:void(0)" target="_blank" class="live-url-highlight" id="live-app-url-link" style="font-size: 1.25rem; font-weight: 700; color: #10b981; text-decoration: none;">http://15.206.74.0:3000</a>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                  <a id="btn-live-app-open" href="javascript:void(0)" target="_blank" class="btn btn-primary btn-sm">🌐 OPEN APPLICATION</a>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-live-app-copy" onclick="navigator.clipboard.writeText(document.getElementById('live-app-url-link').href || ''); alert('Live URL copied to clipboard!');">📋 Copy URL</button>
+                </div>
+              </div>
+
+              <div class="details-table-wrap" style="margin-top: 1rem;">
+                <table class="saas-table">
+                  <tbody>
+                    <tr>
+                      <td style="width: 25%;">Target EC2 Instance</td>
+                      <td><code class="code-pill" id="live-app-instance-id">i-0874001b523dee3c4 (t3.micro)</code></td>
+                      <td style="width: 25%;">AWS Cloud Region</td>
+                      <td><strong id="live-app-region">Amazon Web Services (ap-south-1)</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Target Architecture</td>
+                      <td><span class="status-badge badge-info" id="live-app-arch">x86_64 / linux/amd64</span></td>
+                      <td>Health Status</td>
+                      <td><span class="status-badge badge-success" id="live-app-health-probe">HTTP 200 OK (Probed)</span></td>
+                    </tr>
+                    <tr>
+                      <td>Docker Image Tag</td>
+                      <td><code class="code-pill" id="live-app-image-tag">cloudops/cloudops-demo-app:build-cloudops</code></td>
+                      <td>ECR Digest</td>
+                      <td><code class="code-pill" id="live-app-digest" style="font-size: 0.75rem;">sha256:74e3b9d30cc4...</code></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="live-app-empty-placeholder" class="hidden" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">
+              <span style="font-size: 2rem; display: block; margin-bottom: 0.5rem;">☁️</span>
+              <p style="margin: 0; font-weight: 500;">No live deployment verified yet for this project.</p>
+              <p style="font-size: 0.8rem; margin-top: 0.25rem;">Deploy your application using the pipeline below to establish live production infrastructure.</p>
+            </div>
+          </div>
+
+          <!-- Latest Deployment Result Banner -->
+          <div class="card banner-live-app hidden" id="banner-live-deployment">
+            <div class="banner-icon">🎉</div>
+            <div class="banner-content">
+              <h4 id="banner-deployment-title">APPLICATION DEPLOYED &amp; VERIFIED</h4>
+              <p id="banner-deployment-desc">Your workload is running autonomously on verified cloud infrastructure.</p>
+              <div class="banner-url-box">
+                <span>Endpoint:</span>
+                <a href="javascript:void(0)" target="_blank" class="live-url-highlight" id="deployment-live-url">Pending deployment...</a>
+                <span class="status-badge badge-success" id="deployment-live-badge">PROBED</span>
+                <a id="btn-open-live-app" href="javascript:void(0)" target="_blank" class="btn btn-primary btn-xs" style="margin-left: 0.75rem;">🌐 OPEN APPLICATION</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- RCA Failure Diagnostic Drawer -->
+          <div class="card rca-card" id="deployment-rca-drawer">
+            <div class="card-title-bar">
+              <h4>🔍 Root Cause Analysis (RCA) &amp; Diagnostics</h4>
+              <span class="status-badge badge-success" id="rca-status-badge">OPTIMAL — NO FAILURES</span>
+            </div>
+            <div id="rca-content-box">
+              <p class="text-muted">No active failures detected. All 8 pipeline stages executed successfully with cryptographic verification.</p>
+            </div>
+          </div>
+
+          <!-- Deployment History Table Card -->
+          <div class="card" id="card-deployment-history" style="margin-top: 1.5rem;">
+            <div class="card-title-bar">
+              <h4>📜 Immutable Deployment History</h4>
+              <span class="status-badge badge-info" id="history-total-count">0 Deployments</span>
+            </div>
+            <div class="details-table-wrap">
+              <table class="saas-table" id="deployment-history-table">
+                <thead>
+                  <tr>
+                    <th>Deployment ID</th>
+                    <th>Status</th>
+                    <th>Target Compute</th>
+                    <th>Image / Digest</th>
+                    <th>Endpoint</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="deployment-history-tbody">
+                  <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No deployment records found for this project.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Pipeline Terminal Logs -->
+          <div class="card logs-card" style="margin-top: 1.5rem;">
+            <div class="card-title-bar">
+              <h4>💻 Orchestration Console Logs</h4>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-clear-logs">Clear</button>
+            </div>
+            <pre class="terminal-logs" id="deployment-terminal-logs"><code>[Orchestrator] Ready for deployment execution.</code></pre>
+          </div>
+        </section>
+
+        <!-- 4. VIEW: UPLOAD APPLICATION -->
+        <section class="view-panel" id="view-upload">
+          <div class="view-header">
+            <div>
+              <h3>Upload & Autonomous Ingestion</h3>
+              <p class="section-desc">Drop your source archive. The analyzer inspects language, framework, port, Dockerfile, and generates a tailored deployment plan.</p>
+            </div>
+          </div>
+
+          <!-- Auth Warning for Unauthenticated Users -->
+          <div id="upload-auth-warning" class="status-callout callout-warning hidden" style="margin-bottom: 1.25rem;">
+            <p><strong>🔒 Authentication Required:</strong> You are browsing as a guest. Please <a href="javascript:void(0)" onclick="App.openModal('modal-login')" style="color: #818cf8; text-decoration: underline; font-weight: 600;">Sign In</a> or <a href="javascript:void(0)" onclick="App.openModal('modal-signup')" style="color: #818cf8; text-decoration: underline; font-weight: 600;">Create an Organization</a> to upload applications to your isolated workspace.</p>
+          </div>
+
+          <!-- Upload Dropzone -->
+          <div class="card upload-dropzone-card" id="dropzone-card">
+            <input type="file" id="file-upload-input" accept=".zip" class="hidden-file-input" />
+            <div class="dropzone-inner" id="dropzone-area">
+              <div class="dropzone-icon">📥</div>
+              <h4>Drag & drop your application ZIP here</h4>
+              <p>Supports Node.js, Express, Fastify, Python, Go, Dockerized projects (Max 50MB)</p>
+              <button type="button" class="btn btn-primary" id="btn-browse-file">Browse Computer</button>
+            </div>
+
+            <!-- Upload Progress Bar -->
+            <div id="upload-progress-container" class="upload-progress-container hidden">
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" id="upload-progress-bar" style="width: 0%;"></div>
+              </div>
+              <span class="progress-text" id="upload-progress-label">Uploading & calculating SHA-256...</span>
+            </div>
+          </div>
+
+          <!-- Dynamic Analysis & Requirements Card -->
+          <div id="analysis-result-container" class="card hidden">
+            <div class="card-title-bar">
+              <h4>🔍 Application Inspection Results</h4>
+              <span class="status-badge badge-success" id="analysis-checksum-badge">SHA-256 Verified</span>
+            </div>
+
+            <div class="grid-3-col" style="margin-top: 1rem;">
+              <div class="info-pill-box">
+                <span class="info-label">Runtime</span>
+                <strong id="an-runtime-val">Node.js (Express)</strong>
+              </div>
+              <div class="info-pill-box">
+                <span class="info-label">Detected Port</span>
+                <strong id="an-port-val">3000</strong>
+              </div>
+              <div class="info-pill-box">
+                <span class="info-label">Package Manager</span>
+                <strong id="an-pm-val">npm</strong>
+              </div>
+            </div>
+
+            <!-- "Ask Only When Required" Requirements Section -->
+            <div id="reqs-prompt-section" class="reqs-prompt-section hidden" style="margin-top: 1.5rem;">
+              <div class="status-callout callout-warning">
+                <p><strong>Configuration Action Required:</strong> The application requires the following inputs before deployment:</p>
+              </div>
+              <div id="dynamic-reqs-inputs" style="margin-top: 1rem;"></div>
+            </div>
+
+            <div class="form-actions" style="margin-top: 1.5rem; justify-content: flex-end;">
+              <button type="button" class="btn btn-primary btn-lg" id="btn-proceed-deploy">⚡ Approve & Execute Deployment</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. VIEW: INFRASTRUCTURE (AWS) -->
+        <section class="view-panel" id="view-infrastructure">
+          <div class="view-header">
+            <div>
+              <h3>Cloud Infrastructure (AWS)</h3>
+              <p class="section-desc">Real-time compute instances, container registries, and networking resources in your cloud account.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-infra">🔄 Refresh Resources</button>
+            </div>
+          </div>
+
+          <div class="grid-2-col">
+            <div class="card">
+              <h4>💻 EC2 Compute Instances</h4>
+              <table class="saas-table" style="margin-top: 1rem;">
+                <thead>
+                  <tr>
+                    <th>Instance ID</th>
+                    <th>Type</th>
+                    <th>Public IP</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="infra-ec2-table">
+                  <tr>
+                    <td colspan="4" style="text-align:center; color: var(--text-muted); padding: 2rem;">No EC2 compute instances provisioned for this tenant. Deploy a project to launch infrastructure.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card">
+              <h4>📦 ECR Container Repositories</h4>
+              <table class="saas-table" style="margin-top: 1rem;">
+                <thead>
+                  <tr>
+                    <th>Repository Name</th>
+                    <th>URI</th>
+                    <th>Images</th>
+                  </tr>
+                </thead>
+                <tbody id="infra-ecr-table">
+                  <tr>
+                    <td colspan="3" style="text-align:center; color: var(--text-muted); padding: 2rem;">No ECR container repositories registered for this tenant.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. VIEW: TERRAFORM -->
+        <section class="view-panel" id="view-terraform">
+          <div class="view-header">
+            <div>
+              <h3>Terraform Infrastructure as Code</h3>
+              <p class="section-desc">Tenant-isolated Terraform workspace, HCL generation, state lock, and dry-run execution.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-tf-plan">📋 Run Plan</button>
+              <button type="button" class="btn btn-primary btn-sm" id="btn-tf-apply">🚀 Apply Plan</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title-bar">
+              <h4>Generated HCL Configuration</h4>
+              <span class="status-badge badge-info">Workspace: Isolated Tenant</span>
+            </div>
+            <pre class="code-editor-view" id="tf-hcl-view"><code>resource "aws_instance" "app_server" {
+  ami           = "ami-053b0d53c279acc90"
+  instance_type = "t2.micro"
+  tags = {
+    Name        = "cloudops-production"
+    TenantId    = "tenant-isolated"
+    ManagedBy   = "CloudOps-Terraform"
+  }
+}</code></pre>
+          </div>
+        </section>
+
+        <!-- 7. VIEW: DOCKER -->
+        <section class="view-panel" id="view-docker">
+          <div class="view-header">
+            <div>
+              <h3>Docker Containerization Engine</h3>
+              <p class="section-desc">Multi-stage Dockerfile generation, layer caching, image registry push, and local daemon status.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title-bar">
+              <h4>Multi-Stage Dockerfile Preview</h4>
+              <span class="status-badge badge-success">Optimized Alpine Image</span>
+            </div>
+            <pre class="code-editor-view" id="dockerfile-view"><code>FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]</code></pre>
+          </div>
+        </section>
+
+        <!-- 8. VIEW: CI/CD -->
+        <section class="view-panel" id="view-cicd">
+          <div class="view-header">
+            <div>
+              <h3>CI/CD Pipelines (GitHub & Jenkins)</h3>
+              <p class="section-desc">Source control branch synchronization, declarative Jenkinsfile generation, and build history.</p>
+            </div>
+          </div>
+
+          <div class="grid-2-col">
+            <div class="card">
+              <h4>🐙 GitHub Repository Status</h4>
+              <div class="details-table-wrap" style="margin-top: 1rem;">
+                <table class="saas-table">
+                  <tbody>
+                    <tr>
+                      <td>Connected Account</td>
+                      <td><strong id="cicd-github-user">None</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Active Repository</td>
+                      <td><code class="code-pill" id="cicd-github-repo">None</code></td>
+                    </tr>
+                    <tr>
+                      <td>Branch</td>
+                      <td><strong id="cicd-github-branch">—</strong></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>⚙️ Jenkins Pipeline Builds</h4>
+              <div class="details-table-wrap" style="margin-top: 1rem;">
+                <table class="saas-table">
+                  <tbody>
+                    <tr>
+                      <td>Server URL</td>
+                      <td><code class="code-pill" id="cicd-jenkins-url">None</code></td>
+                    </tr>
+                    <tr>
+                      <td>Job Name</td>
+                      <td><strong id="cicd-jenkins-job">None</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Last Build Status</td>
+                      <td><span class="status-badge badge-warning" id="cicd-jenkins-status">NOT CONFIGURED</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 9. VIEW: KUBERNETES -->
+        <section class="view-panel" id="view-kubernetes">
+          <div class="view-header">
+            <div>
+              <h3>Kubernetes Cluster & Workloads</h3>
+              <p class="section-desc">EKS / Kind cluster workloads, DNS-1123 manifest generation, pod replica health, and service discovery.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4>☸️ Active Cluster Pods</h4>
+            <table class="saas-table" style="margin-top: 1rem;">
+              <thead>
+                <tr>
+                  <th>Pod Name</th>
+                  <th>Namespace</th>
+                  <th>Status</th>
+                  <th>Restarts</th>
+                  <th>Age</th>
+                </tr>
+              </thead>
+              <tbody id="k8s-pods-table">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No active pods in cluster. Deploy a project to launch Kubernetes workloads.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 10. VIEW: OBSERVABILITY -->
+        <section class="view-panel" id="view-observability">
+          <div class="view-header">
+            <div>
+              <h3>Observability & Health Probes</h3>
+              <p class="section-desc">Synthetic health check logs, latency tracking, rolling failure rates, and CloudWatch metrics.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-trigger-health-probe">🩺 Trigger Probe Now</button>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="metric-icon-wrap icon-emerald">🩺</div>
+              <div class="metric-data">
+                <span class="metric-label">Probe Status</span>
+                <strong class="metric-value" id="obs-probe-status">200 OK</strong>
+                <span class="metric-subtext" id="obs-probe-subtext">Healthy</span>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon-wrap icon-blue">⚡</div>
+              <div class="metric-data">
+                <span class="metric-label">Latency</span>
+                <strong class="metric-value" id="obs-latency-val">-- ms</strong>
+                <span class="metric-subtext">Live probe roundtrip</span>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon-wrap icon-purple">📊</div>
+              <div class="metric-data">
+                <span class="metric-label">Success Rate</span>
+                <strong class="metric-value" id="obs-success-rate">100.0%</strong>
+                <span class="metric-subtext">Zero dropped</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 11. VIEW: SELF-HEALING -->
+        <section class="view-panel" id="view-self-healing">
+          <div class="view-header">
+            <div>
+              <h3>Self-Healing & Incident Remediations</h3>
+              <p class="section-desc">Autonomous failure detection, Root Cause Analysis, safe restart policies, and circuit breaker protection.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-auto-healing">🛡️ Toggle Auto-Remediation</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4>🚨 Incident Log & Auto-Recovery History</h4>
+            <table class="saas-table" style="margin-top: 1rem;">
+              <thead>
+                <tr>
+                  <th>Incident ID</th>
+                  <th>Trigger Cause</th>
+                  <th>Action Taken</th>
+                  <th>Result</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody id="incidents-table-body">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No active incidents. Self-healing loop active and monitoring.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 12. VIEW: CONNECTIONS -->
+        <section class="view-panel" id="view-connections">
+          <div class="view-header">
+            <div>
+              <h3>Provider Connection Center</h3>
+              <p class="section-desc">Tenant-isolated provider credentials stored in AES-256-GCM encrypted vault. Never hard-coded.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-connections">🔄 Refresh Status</button>
+            </div>
+          </div>
+
+          <div class="connections-grid">
+            <!-- AWS -->
+            <div class="provider-card" style="border-left: 3px solid #f59e0b;">
+              <div class="provider-header">
+                <span class="provider-icon">☁️</span>
+                <div class="provider-meta">
+                  <strong>AWS Cloud Provider</strong>
+                  <span class="provider-desc">ECR, EC2, SSM, CloudWatch</span>
+                </div>
+                <span class="status-badge badge-warning" id="conn-badge-aws">NOT CONNECTED</span>
+              </div>
+              <div class="provider-body">
+                <div>Account: <code class="code-pill" id="conn-card-aws-account">None</code></div>
+                <div>Region: <strong id="conn-card-aws-region">ap-south-1</strong></div>
+              </div>
+              <div class="provider-actions">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-test-aws">🔍 Test STS</button>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-manage-aws">⚙️ Configure</button>
+              </div>
+            </div>
+
+            <!-- GitHub -->
+            <div class="provider-card" style="border-left: 3px solid #6366f1;">
+              <div class="provider-header">
+                <span class="provider-icon">🐙</span>
+                <div class="provider-meta">
+                  <strong>GitHub Source Control</strong>
+                  <span class="provider-desc">Repo sync & Git push</span>
+                </div>
+                <span class="status-badge badge-warning" id="conn-badge-github">NOT CONNECTED</span>
+              </div>
+              <div class="provider-body">
+                <div>User: <strong id="conn-card-github-user">None</strong></div>
+                <div>Scope: <code class="code-pill">repo, workflow</code></div>
+              </div>
+              <div class="provider-actions">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-test-github">🔍 Test PAT</button>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-manage-github">⚙️ Configure</button>
+              </div>
+            </div>
+
+            <!-- Jenkins -->
+            <div class="provider-card" style="border-left: 3px solid #10b981;">
+              <div class="provider-header">
+                <span class="provider-icon">⚙️</span>
+                <div class="provider-meta">
+                  <strong>Jenkins CI/CD</strong>
+                  <span class="provider-desc">Pipeline build triggers</span>
+                </div>
+                <span class="status-badge badge-warning" id="conn-badge-jenkins">NOT CONNECTED</span>
+              </div>
+              <div class="provider-body">
+                <div>URL: <code class="code-pill" id="conn-card-jenkins-url">None</code></div>
+                <div>User: <strong id="conn-card-jenkins-user">None</strong></div>
+              </div>
+              <div class="provider-actions">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-test-jenkins">🔍 Test API</button>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-manage-jenkins">⚙️ Configure</button>
+              </div>
+            </div>
+
+            <!-- Local Docker Agent -->
+            <div class="provider-card" style="border-left: 3px solid #38bdf8;">
+              <div class="provider-header">
+                <span class="provider-icon">💻</span>
+                <div class="provider-meta">
+                  <strong>CloudOps Local Docker Agent</strong>
+                  <span class="provider-desc">Build & run containers on user computer</span>
+                </div>
+                <span class="status-badge badge-warning" id="conn-badge-agent">NOT PAIRED</span>
+              </div>
+              <div class="provider-body">
+                <div>Host: <strong id="conn-card-agent-host">No machine connected</strong></div>
+                <div>Docker: <code class="code-pill" id="conn-card-agent-docker">Offline</code></div>
+              </div>
+              <div class="provider-actions">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-status-agent">🔄 Status</button>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-pair-agent">🔗 Pair Machine</button>
+              </div>
+            </div>
+
+            <!-- Terraform -->
+            <div class="provider-card" style="border-left: 3px solid #8b5cf6;">
+              <div class="provider-header">
+                <span class="provider-icon">🏗️</span>
+                <div class="provider-meta">
+                  <strong>Terraform CLI</strong>
+                  <span class="provider-desc">Infrastructure as Code</span>
+                </div>
+                <span class="status-badge badge-success" id="conn-badge-tf">READY</span>
+              </div>
+              <div class="provider-body">
+                <div>CLI Engine: <code class="code-pill" id="conn-card-tf-version">v1.14.0</code></div>
+                <div>State Engine: <strong>Tenant Isolated</strong></div>
+              </div>
+              <div class="provider-actions">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-test-tf">🔍 Test CLI</button>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-manage-tf">⚙️ Configure</button>
+              </div>
+            </div>
+
+            <!-- Kubernetes -->
+            <div class="provider-card" style="border-left: 3px solid #06b6d4;">
+              <div class="provider-header">
+                <span class="provider-icon">☸️</span>
+                <div class="provider-meta">
+                  <strong>Kubernetes / Kind</strong>
+                  <span class="provider-desc">Cluster manifests & pods</span>
+                </div>
+                <span class="status-badge badge-success" id="conn-badge-k8s">READY</span>
+              </div>
+              <div class="provider-body">
+                <div>Cluster: <strong id="conn-card-k8s-cluster">kind-cloudops</strong></div>
+                <div>Context: <code class="code-pill" id="conn-card-k8s-context">kind-kind</code></div>
+              </div>
+              <div class="provider-actions">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-test-k8s">🔍 Test Cluster</button>
+                <button type="button" class="btn btn-primary btn-xs" id="btn-manage-k8s">⚙️ Configure</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 13. VIEW: AUDIT LOGS -->
+        <section class="view-panel" id="view-audit-logs">
+          <div class="view-header">
+            <div>
+              <h3>Security & Compliance Audit Trail</h3>
+              <p class="section-desc">Tenant-scoped event log with cryptographic timestamps, actor attribution, and automatic secret redaction.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-audit">🔄 Refresh Logs</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <table class="saas-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Actor</th>
+                  <th>Action</th>
+                  <th>Target</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="audit-logs-table-body">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No audit log events recorded yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 14. VIEW: SETTINGS & TEAM -->
+        <section class="view-panel" id="view-settings">
+          <div class="view-header">
+            <div>
+              <h3>Organization Settings & Team Members</h3>
+              <p class="section-desc">Manage tenant name, invite developers, configure RBAC roles (OWNER, ADMIN, MEMBER), and security tokens.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-open-invite-modal">➕ Invite Member</button>
+            </div>
+          </div>
+
+          <div class="grid-2-col">
+            <div class="card">
+              <h4>🏢 Organization Details</h4>
+              <div class="details-table-wrap" style="margin-top: 1rem;">
+                <table class="saas-table">
+                  <tbody>
+                    <tr>
+                      <td>Organization Name</td>
+                      <td><strong id="settings-org-name">—</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Organization ID</td>
+                      <td><code class="code-pill" id="settings-org-id">—</code></td>
+                    </tr>
+                    <tr>
+                      <td>Status</td>
+                      <td><span class="status-badge badge-success">ACTIVE TENANT</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>👥 Team Members (RBAC)</h4>
+              <table class="saas-table" style="margin-top: 1rem;">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                  </tr>
+                </thead>
+                <tbody id="settings-members-table">
+                  <tr>
+                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading team members...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- AUTH MODALS -->
+  <!-- Login Modal -->
+  <div class="modal-overlay hidden" id="modal-login">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Login to CloudOps</h3>
+        <button type="button" class="modal-close-btn" onclick="App.closeModals()">✕</button>
+      </div>
+      <form id="form-login" class="modal-form">
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="login-email" required placeholder="developer@cloudops.internal" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" required placeholder="••••••••••••" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Signup Modal -->
+  <div class="modal-overlay hidden" id="modal-signup">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create New CloudOps Organization</h3>
+        <button type="button" class="modal-close-btn" onclick="App.closeModals()">✕</button>
+      </div>
+      <form id="form-signup" class="modal-form">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="signup-name" required placeholder="Alice CloudOps" />
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="signup-email" required placeholder="alice@enterprise.com" />
+        </div>
+        <div class="form-group">
+          <label>Organization / Tenant Name</label>
+          <input type="text" id="signup-org-name" required placeholder="Acme Cloud Corp" />
+        </div>
+        <div class="form-group">
+          <label>Password (Min 8 characters, uppercase, number & symbol)</label>
+          <input type="password" id="signup-password" required placeholder="P@ssw0rd123!" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Sign Up & Create Tenant</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Provider Configuration Modal -->
+  <div class="modal-overlay hidden" id="modal-connection">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-conn-title">Configure Provider Connection</h3>
+        <button type="button" class="modal-close-btn" onclick="App.closeModals()">✕</button>
+      </div>
+      <form id="form-connection" class="modal-form">
+        <input type="hidden" id="conn-modal-type" value="AWS" />
+        <div id="conn-modal-fields"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save to Encrypted Vault</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Invite Member Modal -->
+  <div class="modal-overlay hidden" id="modal-invite">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Invite Team Member</h3>
+        <button type="button" class="modal-close-btn" onclick="App.closeModals()">✕</button>
+      </div>
+      <form id="form-invite" class="modal-form">
+        <div class="form-group">
+          <label>Member Email</label>
+          <input type="email" id="invite-email" required placeholder="colleague@enterprise.com" />
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select id="invite-role" class="saas-select">
+            <option value="MEMBER">MEMBER (Read & Deploy)</option>
+            <option value="ADMIN">ADMIN (Manage Infrastructure & Providers)</option>
+            <option value="OWNER">OWNER (Full Control)</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Send Invitation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Docker Agent Pairing Modal -->
+  <div class="modal-overlay hidden" id="modal-pair-agent">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3>💻 Pair CloudOps Local Docker Agent</h3>
+        <button type="button" class="modal-close-btn" onclick="App.closeModals()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1rem 0;">
+        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+          Connect your local laptop's Docker daemon to your CloudOps organization in two simple steps without cloning any repository.
+        </p>
+
+        <!-- OS Selection Header -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+          <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">STEP 1: INSTALL CLOUDOPS AGENT CLI</span>
+          <div style="display: flex; gap: 0.5rem;" id="agent-os-tabs">
+            <button type="button" class="btn btn-secondary btn-sm active" id="btn-os-unix" onclick="App.setAgentInstallerOS('unix')" style="padding: 2px 8px; font-size: 0.75rem;">macOS / Linux</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-os-win" onclick="App.setAgentInstallerOS('windows')" style="padding: 2px 8px; font-size: 0.75rem;">Windows</button>
+          </div>
+        </div>
+
+        <div style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem; position: relative; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted);" id="installer-label">Run in terminal (macOS / Linux):</div>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.copyInstallCommand()">📋 Copy Install</button>
+          </div>
+          <code id="agent-install-command" style="font-family: monospace; font-size: 0.82rem; color: #a78bfa; word-break: break-all; display: block;">
+            curl -fsSL /install.sh | sh
+          </code>
+        </div>
+
+        <!-- Step 2: Pair -->
+        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem;">STEP 2: PAIR MACHINE WITH THIS TENANT (Valid for 10 min)</div>
+        <div style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem; position: relative; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Run in terminal:</div>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.copyPairingCommand()">📋 Copy Pair</button>
+          </div>
+          <code id="agent-pairing-command" style="font-family: monospace; font-size: 0.85rem; color: #38bdf8; word-break: break-all; display: block;">
+            Generating pairing code...
+          </code>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--text-muted);">
+          <span>Requirements: Node.js 18+ & Docker Engine</span>
+          <a href="/api/agent/dist/cloudops-agent" download="cloudops-agent" style="color: var(--accent-primary, #6366f1); text-decoration: none; font-size: 0.8rem;">📥 Download Script Directly</a>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="App.closeModals()">Close</button>
+        <button type="button" class="btn btn-primary" onclick="App.copyPairingCommand()">📋 Copy Pairing Command</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

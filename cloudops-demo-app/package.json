@@ -1,0 +1,31 @@
+{
+  "name": "cloudops-demo-app",
+  "version": "1.0.0",
+  "description": "CloudOps Demo Application - Test workload for Autonomous DevOps and CloudOps platform",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/api.test.js",
+    "test:watch": "node --test --watch test/api.test.js"
+  },
+  "keywords": [
+    "cloudops",
+    "devops",
+    "express",
+    "nodejs",
+    "rest-api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2",
+    "helmet": "^8.0.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

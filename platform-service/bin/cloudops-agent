@@ -1,0 +1,582 @@
+#!/usr/bin/env node
+
+/**
+ * CloudOps Local Docker Agent CLI
+ * Standalone CLI for secure local Docker builds and container orchestration
+ * Can be executed from ANY directory on macOS, Linux, and Windows.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
+const { execSync, spawnSync } = require('child_process');
+
+const VERSION = '1.0.0';
+const DEFAULT_SERVER = process.env.CLOUDOPS_SERVER || process.env.PUBLIC_BASE_URL || 'http://localhost:4000';
+
+function getConfigDir() {
+  const home = os.homedir() || process.cwd();
+  const dir = path.join(home, '.cloudops');
+  if (!fs.existsSync(dir)) {
+    try {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    } catch {}
+  }
+  return dir;
+}
+
+function getConfigFile() {
+  return path.join(getConfigDir(), 'agent.json');
+}
+
+function loadConfig() {
+  const file = getConfigFile();
+  if (fs.existsSync(file)) {
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {}
+  }
+  return null;
+}
+
+function saveConfig(data) {
+  const file = getConfigFile();
+  try {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), { encoding: 'utf8', mode: 0o600 });
+  } catch {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+  }
+}
+
+function clearConfig() {
+  const file = getConfigFile();
+  if (fs.existsSync(file)) {
+    try {
+      fs.unlinkSync(file);
+    } catch {}
+  }
+}
+
+function getDockerStatus() {
+  // Check if docker executable exists in PATH
+  let versionOut = '';
+  try {
+    versionOut = execSync('docker --version', { encoding: 'utf8', timeout: 2000, stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+  } catch (err) {
+    return {
+      running: false,
+      installed: false,
+      version: null,
+      error: 'Docker Engine is not installed or the docker CLI is not found in PATH.'
+    };
+  }
+
+  // Check if Docker daemon is responding
+  try {
+    const infoOut = execSync('docker info --format "{{.ServerVersion}}|{{.ContainersRunning}}|{{.Images}}|{{.OperatingSystem}}"', {
+      encoding: 'utf8',
+      timeout: 2500,
+      stdio: ['pipe', 'pipe', 'ignore']
+    }).trim();
+
+    const parts = infoOut.split('|');
+    return {
+      running: true,
+      installed: true,
+      version: versionOut,
+      serverVersion: parts[0] || 'Unknown',
+      containersRunning: parts[1] || '0',
+      imagesCount: parts[2] || '0',
+      operatingSystem: parts[3] || os.type(),
+      summary: `${parts[1] || 0} containers running / ${parts[2] || 0} images`
+    };
+  } catch (daemonErr) {
+    return {
+      running: false,
+      installed: true,
+      version: versionOut,
+      error: 'Docker Engine is not installed or the Docker daemon is not running. Please start Docker Desktop or the dockerd service.'
+    };
+  }
+}
+
+function parseArgs(args) {
+  const options = {};
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith('--')) {
+      const key = arg.slice(2);
+      const next = args[i + 1];
+      if (next && !next.startsWith('-')) {
+        options[key] = next;
+        i++;
+      } else {
+        options[key] = true;
+      }
+    } else {
+      positional.push(arg);
+    }
+  }
+  return { command: positional[0] || 'help', positional: positional.slice(1), options };
+}
+
+async function handleConnect(options) {
+  const code = options.code;
+  const server = (options.server || DEFAULT_SERVER).replace(/\/+$/, '');
+
+  if (!code) {
+    console.error('\n✖ Error: Missing pairing code.');
+    console.error('  Usage: cloudops-agent connect --code PAIR-XXXXXXXX --server <server-url>\n');
+    process.exit(1);
+  }
+
+  console.log(`\nConnecting to CloudOps Control Plane at ${server}...`);
+  console.log(`Pairing code: ${code}`);
+
+  const docker = getDockerStatus();
+  const machineInfo = {
+    hostname: os.hostname(),
+    os: `${os.type()} ${os.release()}`,
+    arch: os.arch(),
+    dockerVersion: docker.running ? docker.version : (docker.installed ? `${docker.version} (Daemon Offline)` : 'Not Installed'),
+    dockerServerVersion: docker.serverVersion || 'None',
+    agentVersion: VERSION
+  };
+
+  try {
+    const res = await fetch(`${server}/api/agent/pair/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, machineInfo })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `HTTP ${res.status}`);
+    }
+
+    saveConfig({
+      server,
+      agentId: data.agentId,
+      agentToken: data.agentToken,
+      organizationId: data.organizationId,
+      organizationName: data.organizationName,
+      pairedAt: new Date().toISOString()
+    });
+
+    console.log(`\n✔ Successfully paired with organization: '${data.organizationName}'`);
+    console.log(`  Agent ID:        ${data.agentId}`);
+    console.log(`  Machine:         ${machineInfo.hostname} (${machineInfo.os} ${machineInfo.arch})`);
+    console.log(`  Docker Engine:   ${docker.running ? docker.version : '⚠️ OFFLINE (' + docker.error + ')'}`);
+    console.log(`\nYour local machine is now paired. You can execute local builds directly from the CloudOps dashboard.\n`);
+    process.exit(0);
+  } catch (err) {
+    console.error(`\n✖ Pairing failed: ${err.message}\n`);
+    process.exit(1);
+  }
+}
+
+async function handleHeartbeat() {
+  const config = loadConfig();
+  if (!config) {
+    console.error('Agent is not paired. Run `cloudops-agent connect --code <CODE>` first.');
+    process.exit(1);
+  }
+
+  const docker = getDockerStatus();
+  try {
+    const res = await fetch(`${config.server}/api/agent/heartbeat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.agentToken}`
+      },
+      body: JSON.stringify({
+        agentId: config.agentId,
+        dockerStatus: {
+          running: docker.running,
+          version: docker.version || 'Offline',
+          containersCount: docker.containersRunning ? parseInt(docker.containersRunning, 10) : 0,
+          imagesCount: docker.imagesCount ? parseInt(docker.imagesCount, 10) : 0
+        }
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `HTTP ${res.status}`);
+    }
+    console.log(`✔ Heartbeat acknowledged by ${config.server} (${data.lastHeartbeat})`);
+    process.exit(0);
+  } catch (err) {
+    console.error(`✖ Heartbeat failed: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+async function handleStatus() {
+  const config = loadConfig();
+  const docker = getDockerStatus();
+
+  console.log('======================================================');
+  console.log(`CLOUDOPS LOCAL DOCKER AGENT (v${VERSION})`);
+  console.log('======================================================');
+  console.log(`Host Platform:   ${os.type()} ${os.release()} (${os.arch()})`);
+  console.log(`Hostname:        ${os.hostname()}`);
+  console.log(`Docker Status:   ${docker.running ? 'ONLINE (' + docker.version + ')' : 'OFFLINE (' + docker.error + ')'}`);
+  
+  if (!config) {
+    console.log(`Pairing Status:  NOT PAIRED`);
+    console.log('\nRun `cloudops-agent connect --code <CODE>` to pair with your CloudOps workspace.\n');
+    return;
+  }
+
+  console.log(`Server Endpoint: ${config.server}`);
+  console.log(`Organization:    ${config.organizationName}`);
+  console.log(`Agent ID:        ${config.agentId}`);
+  console.log(`Paired At:       ${config.pairedAt}`);
+  console.log('======================================================\n');
+}
+
+function handleDockerStatus() {
+  const d = getDockerStatus();
+  console.log('======================================================');
+  console.log('DOCKER ENGINE STATUS');
+  console.log('======================================================');
+  console.log(`Installed:       ${d.installed ? 'Yes' : 'No'}`);
+  console.log(`Daemon Running:  ${d.running ? 'Yes' : 'No'}`);
+  console.log(`Client Version:  ${d.version || 'None'}`);
+  if (d.serverVersion) console.log(`Server Version:  ${d.serverVersion}`);
+  if (d.summary) console.log(`Metrics:         ${d.summary}`);
+  if (d.error) {
+    console.log(`Diagnostic:      ${d.error}`);
+  }
+  console.log('======================================================\n');
+  if (!d.running) {
+    process.exit(1);
+  }
+}
+
+function handleDockerPs() {
+  try {
+    const out = execSync('docker ps --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.Names}}"', { encoding: 'utf8' });
+    console.log(out);
+  } catch (err) {
+    console.error('Docker ps failed:', err.message);
+    process.exit(1);
+  }
+}
+
+function handleDockerImages() {
+  try {
+    const out = execSync('docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}"', { encoding: 'utf8' });
+    console.log(out);
+  } catch (err) {
+    console.error('Docker images failed:', err.message);
+    process.exit(1);
+  }
+}
+
+function handleBuild(options) {
+  const rawDir = options.dir || process.cwd();
+  const dir = path.resolve(rawDir);
+  const tag = options.tag || 'cloudops-local-app:latest';
+
+  if (!fs.existsSync(dir)) {
+    console.error(`\n✖ Error: Build directory does not exist: '${dir}'\n`);
+    process.exit(1);
+  }
+
+  const dockerfile = path.join(dir, 'Dockerfile');
+  if (!fs.existsSync(dockerfile)) {
+    console.error(`\n✖ Error: No Dockerfile found in context directory '${dir}'.\n`);
+    process.exit(1);
+  }
+
+  console.log(`\nBuilding Docker image '${tag}' from context '${dir}'...`);
+  try {
+    const result = spawnSync('docker', ['build', '-t', tag, dir], { stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`docker build exited with code ${result.status}`);
+    }
+    console.log(`\n✔ Docker build completed successfully for '${tag}'\n`);
+  } catch (err) {
+    console.error(`\n✖ Build error: ${err.message}\n`);
+    process.exit(1);
+  }
+}
+
+function handleRun(options) {
+  const image = options.image || 'cloudops-local-app:latest';
+  const name = options.name || `cloudops-${Date.now().toString(36)}`;
+  const port = options.port || '3000';
+
+  console.log(`\nRunning container '${name}' on port ${port} using image '${image}'...`);
+  try {
+    const result = spawnSync('docker', ['run', '-d', '--name', name, '-p', `${port}:${port}`, image], { stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`docker run exited with code ${result.status}`);
+    }
+    console.log(`\n✔ Container '${name}' started on http://localhost:${port}\n`);
+  } catch (err) {
+    console.error(`\n✖ Run error: ${err.message}\n`);
+    process.exit(1);
+  }
+}
+
+function handleLogs(options) {
+  const name = options.name;
+  if (!name) {
+    console.error('\n✖ Error: Container name required. Usage: cloudops-agent logs --name <container-name>\n');
+    process.exit(1);
+  }
+  try {
+    spawnSync('docker', ['logs', '--tail', '100', name], { stdio: 'inherit' });
+  } catch (err) {
+    console.error('Docker logs error:', err.message);
+    process.exit(1);
+  }
+}
+
+function handleStop(options) {
+  const name = options.name;
+  if (!name) {
+    console.error('\n✖ Error: Container name required. Usage: cloudops-agent stop --name <container-name>\n');
+    process.exit(1);
+  }
+  try {
+    execSync(`docker stop ${name} && docker rm ${name}`, { stdio: 'inherit' });
+    console.log(`\n✔ Container '${name}' stopped and removed\n`);
+  } catch (err) {
+    console.error('Docker stop error:', err.message);
+    process.exit(1);
+  }
+}
+
+async function handleDisconnect() {
+  const config = loadConfig();
+  if (config) {
+    try {
+      await fetch(`${config.server}/api/agent/disconnect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.agentToken}`
+        }
+      });
+    } catch {}
+  }
+  clearConfig();
+  console.log('\n✔ CloudOps Local Agent disconnected and credentials purged.\n');
+}
+
+async function handleUpdate(options) {
+  const config = loadConfig();
+  const server = (options.server || config?.server || DEFAULT_SERVER).replace(/\/+$/, '');
+
+  console.log(`\n▶ Checking for updates from ${server}...`);
+  let manifest;
+  try {
+    const res = await fetch(`${server}/api/agent/dist/version`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    manifest = await res.json();
+  } catch (err) {
+    console.error(`✖ Failed to check updates: ${err.message}`);
+    process.exit(1);
+  }
+
+  console.log(`  Current version: v${VERSION}`);
+  console.log(`  Latest version:  v${manifest.version}`);
+
+  if (manifest.version === VERSION && !options.force) {
+    console.log('\n✔ CloudOps Agent is already up to date.\n');
+    return;
+  }
+
+  console.log(`\n▶ Downloading update v${manifest.version}...`);
+  const downloadUrl = manifest.downloadUrl || `${server}/api/agent/dist/cloudops-agent`;
+  const tempFile = path.join(getConfigDir(), `cloudops-agent-update-${Date.now()}.tmp`);
+
+  try {
+    const binRes = await fetch(downloadUrl);
+    if (!binRes.ok) throw new Error(`HTTP ${binRes.status}: ${binRes.statusText}`);
+    const arrayBuffer = await binRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Verify SHA-256 Checksum
+    const expectedChecksum = manifest.checksums?.['cloudops-agent'];
+    if (expectedChecksum) {
+      const actualChecksum = crypto.createHash('sha256').update(buffer).digest('hex');
+      if (actualChecksum !== expectedChecksum) {
+        throw new Error(`Checksum mismatch! Expected: ${expectedChecksum}, Actual: ${actualChecksum}`);
+      }
+      console.log(`✔ SHA-256 Checksum verified: ${actualChecksum}`);
+    }
+
+    fs.writeFileSync(tempFile, buffer, { mode: 0o755 });
+
+    // Target executable path (installed binary or current script)
+    const home = os.homedir() || process.cwd();
+    const installedPath = path.join(home, '.cloudops', 'bin', 'cloudops-agent');
+    const targetPath = fs.existsSync(installedPath) ? installedPath : (process.argv[1] || installedPath);
+
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.renameSync(tempFile, targetPath);
+    try { fs.chmodSync(targetPath, 0o755); } catch {}
+
+    console.log(`\n✔ CloudOps Agent updated successfully to v${manifest.version}!\n`);
+    process.exit(0);
+  } catch (err) {
+    if (fs.existsSync(tempFile)) {
+      try { fs.unlinkSync(tempFile); } catch {}
+    }
+    console.error(`✖ Update failed: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+async function handleUninstall() {
+  console.log('\n▶ Initiating CloudOps Local Agent uninstallation...');
+
+  // 1. Unpair from control plane if config exists
+  const config = loadConfig();
+  if (config && config.server && config.agentToken) {
+    try {
+      console.log('▶ Notifying control plane to revoke agent pairing...');
+      await fetch(`${config.server}/api/agent/disconnect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.agentToken}`
+        }
+      });
+    } catch {}
+  }
+
+  // 2. Clear credentials
+  clearConfig();
+
+  // 3. Remove installed binaries
+  const home = os.homedir() || process.cwd();
+  const binDir = path.join(home, '.cloudops', 'bin');
+  const filesToRemove = [
+    path.join(binDir, 'cloudops-agent'),
+    path.join(binDir, 'cloudops-agent.js'),
+    path.join(binDir, 'cloudops-agent.cmd')
+  ];
+
+  for (const f of filesToRemove) {
+    if (fs.existsSync(f)) {
+      try { fs.unlinkSync(f); } catch {}
+    }
+  }
+
+  console.log('\n✔ CloudOps Agent uninstalled successfully.');
+  console.log(`  Local credentials and binaries in ${binDir} have been removed.`);
+  console.log('  Note: If you added export PATH="$HOME/.cloudops/bin:$PATH" to your shell profile, you may remove that line at your convenience.\n');
+  process.exit(0);
+}
+
+function showHelp() {
+  console.log(`
+CloudOps Local Docker Agent CLI (v${VERSION})
+
+USAGE:
+  cloudops-agent <command> [options]
+
+COMMANDS:
+  connect       Pair local machine with CloudOps control plane using a pairing code
+                Usage: cloudops-agent connect --code PAIR-XXXXXXXX [--server <url>]
+
+  status        Display agent pairing status, control plane endpoint, and machine specs
+  docker-status Check if local Docker daemon is operational and list engine metrics
+  heartbeat     Send keepalive pulse to the CloudOps control plane
+
+  containers    List active local Docker containers (alias: ps)
+  images        List available local Docker images
+  build         Execute Docker build locally on user machine
+                Usage: cloudops-agent build [--dir .] [--tag <image-tag>]
+  run           Run container locally on user machine
+                Usage: cloudops-agent run --image <image> [--name <name>] [--port 3000]
+  logs          Stream logs for a local container
+                Usage: cloudops-agent logs --name <container-name>
+  stop          Stop and remove a local container
+                Usage: cloudops-agent stop --name <container-name>
+
+  update        Check for agent updates and update to latest release
+                Usage: cloudops-agent update [--server <url>] [--force]
+  uninstall     Unpair agent, purge local credentials, and remove binaries
+  disconnect    Unpair agent and purge local credentials
+  --version     Display agent version
+  help          Show this help text
+`);
+}
+
+async function main() {
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
+    console.log(`cloudops-agent v${VERSION} (node ${process.version}, ${os.platform()}-${os.arch()})`);
+    return;
+  }
+
+  const { command, options } = parseArgs(rawArgs);
+
+  switch (command.toLowerCase()) {
+    case 'connect':
+    case 'login':
+    case 'pair':
+      await handleConnect(options);
+      break;
+    case 'status':
+      await handleStatus();
+      break;
+    case 'docker-status':
+      handleDockerStatus();
+      break;
+    case 'heartbeat':
+      await handleHeartbeat();
+      break;
+    case 'ps':
+    case 'containers':
+      handleDockerPs();
+      break;
+    case 'images':
+      handleDockerImages();
+      break;
+    case 'build':
+      handleBuild(options);
+      break;
+    case 'run':
+      handleRun(options);
+      break;
+    case 'logs':
+      handleLogs(options);
+      break;
+    case 'stop':
+      handleStop(options);
+      break;
+    case 'update':
+    case 'upgrade':
+      await handleUpdate(options);
+      break;
+    case 'uninstall':
+      await handleUninstall();
+      break;
+    case 'disconnect':
+      await handleDisconnect();
+      break;
+    case 'help':
+    default:
+      showHelp();
+      break;
+  }
+}
+
+main().then(() => {
+  process.exit(0);
+}).catch(err => {
+  console.error('Fatal agent error:', err.message);
+  process.exit(1);
+});

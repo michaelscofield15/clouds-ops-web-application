@@ -1,0 +1,51 @@
+{
+  "name": "platform-service",
+  "version": "1.0.0",
+  "description": "Autonomous DevOps and CloudOps Platform - Ingestion and Project Analyzer Service",
+  "main": "src/server.js",
+  "bin": {
+    "cloudops-agent": "./bin/cloudops-agent"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/run-all.js",
+    "test:agent": "node test/local-agent.test.js && node test/standalone-agent-cli.test.js",
+    "test:e2e": "node test/e2e-github-jenkins.js",
+    "test:k8s": "node test/e2e-kubernetes.js",
+    "test:aws": "node test/aws.e2e.test.js",
+    "test:selfhealing": "node --test test/selfHealing.test.js",
+    "test:selfhealing:aws": "node --test test/selfHealing.aws.e2e.test.js",
+    "test:multitenant": "node test/multi-tenant.test.js",
+    "test:multitenant:aws": "node test/multi-tenant.aws.e2e.test.js",
+    "test:saas": "node test/saas.test.js",
+    "test:saas:aws": "node test/saas.aws.e2e.test.js"
+  },
+  "keywords": [
+    "cloudops",
+    "devops",
+    "analyzer",
+    "ingestion",
+    "zip-analyzer"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1116.0",
+    "@aws-sdk/client-ec2": "^3.1116.0",
+    "@aws-sdk/client-ecr": "^3.1116.0",
+    "@aws-sdk/client-iam": "^3.1116.0",
+    "@aws-sdk/client-ssm": "^3.1116.0",
+    "@aws-sdk/client-sts": "^3.1116.0",
+    "adm-zip": "^0.5.16",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
