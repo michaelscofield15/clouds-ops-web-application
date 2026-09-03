@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: cloudops-platform
+
+spec:
+  selector:
+    app: cloudops-platform
+
+  ports:
+    - protocol: TCP
+      port: 4000
+      targetPort: 4000
+
+  type: LoadBalancer
