@@ -368,12 +368,20 @@ class AuthService {
     const tokenHash = this.hashToken(rawToken);
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
 
-    db.insert('sessions', {
+    const sessionDoc = {
       tokenHash,
       userId,
       organizationId,
       expiresAt
-    });
+    };
+
+    // Save in local DB
+    db.insert('sessions', sessionDoc);
+
+    // Save in MongoDB if available
+    if (await mongodbService.isAvailable()) {
+      await mongodbService.createSession(sessionDoc);
+    }
 
     return { rawToken, expiresAt };
   }
@@ -402,33 +410,53 @@ class AuthService {
     }
 
     const tokenHash = this.hashToken(cleanToken);
-    const session = db.findOne('sessions', { tokenHash });
+    let session = db.findOne('sessions', { tokenHash });
+
+    // Check MongoDB for session if not in local store
+    if (!session && (await mongodbService.isAvailable())) {
+      session = await mongodbService.findSessionByTokenHash(tokenHash);
+    }
+
     if (!session) {
       return null;
     }
 
     // Check expiration
     if (new Date(session.expiresAt).getTime() < Date.now()) {
-      db.delete('sessions', session.id);
+      if (session.id) db.delete('sessions', session.id);
+      if (await mongodbService.isAvailable()) {
+        await mongodbService.deleteSession(tokenHash);
+      }
       return null;
     }
 
-    const user = db.findById('users', session.userId);
+    let user = db.findById('users', session.userId);
+    if (!user && (await mongodbService.isAvailable())) {
+      user = await mongodbService.findUserById(session.userId);
+    }
+
     if (!user || user.status !== 'ACTIVE') {
       return null;
     }
 
-    const organization = db.findById('organizations', session.organizationId);
-    const membership = db.findOne('memberships', {
+    let organization = db.findById('organizations', session.organizationId);
+    if (!organization && (await mongodbService.isAvailable())) {
+      organization = await mongodbService.findOrganizationById(session.organizationId);
+    }
+
+    let membership = db.findOne('memberships', {
       organizationId: session.organizationId,
       userId: user.id
     });
+    if (!membership && (await mongodbService.isAvailable())) {
+      membership = await mongodbService.findMembership(session.organizationId, user.id);
+    }
 
     return {
       user: this.sanitizeUser(user),
       organization: organization || { id: session.organizationId, name: 'Default Workspace' },
       membership: membership || { role: 'MEMBER' },
-      sessionId: session.id
+      sessionId: session.id || session.tokenHash
     };
   }
 
@@ -438,12 +466,20 @@ class AuthService {
   async revokeToken(rawToken) {
     if (!rawToken) return false;
     const tokenHash = this.hashToken(rawToken.trim());
+    let revoked = false;
+
     const session = db.findOne('sessions', { tokenHash });
     if (session) {
       db.delete('sessions', session.id);
-      return true;
+      revoked = true;
     }
-    return false;
+
+    if (await mongodbService.isAvailable()) {
+      const mRevoked = await mongodbService.deleteSession(tokenHash);
+      if (mRevoked) revoked = true;
+    }
+
+    return revoked;
   }
 }
 

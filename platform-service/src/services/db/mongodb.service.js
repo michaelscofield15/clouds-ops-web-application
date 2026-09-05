@@ -52,7 +52,7 @@ class MongoDBService {
   }
 
   /**
-   * Ensures unique indexes on users collection
+   * Ensures unique indexes on collections
    */
   async ensureIndexes() {
     if (!this.isConnected || !this.db) return;
@@ -60,7 +60,19 @@ class MongoDBService {
       const usersCol = this.db.collection('users');
       await usersCol.createIndex({ email: 1 }, { unique: true });
       await usersCol.createIndex({ googleId: 1 }, { unique: true, sparse: true });
-      console.log('[MongoDB] Unique indexes ensured on users collection (email, googleId)');
+      await usersCol.createIndex({ id: 1 }, { unique: true });
+
+      const sessionsCol = this.db.collection('sessions');
+      await sessionsCol.createIndex({ tokenHash: 1 }, { unique: true });
+      await sessionsCol.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+      const orgsCol = this.db.collection('organizations');
+      await orgsCol.createIndex({ id: 1 }, { unique: true });
+
+      const memCol = this.db.collection('memberships');
+      await memCol.createIndex({ organizationId: 1, userId: 1 });
+
+      console.log('[MongoDB] Unique indexes ensured on users, sessions, organizations, memberships');
     } catch (err) {
       console.warn('[MongoDB] Index creation warning:', err.message);
     }
@@ -167,6 +179,80 @@ class MongoDBService {
       return updatedDoc ? this._formatDoc(updatedDoc) : null;
     } catch (err) {
       console.error('[MongoDB] updateUser error:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Sessions, Organizations, Memberships in MongoDB
+   */
+  async createSession(sessionDoc) {
+    if (!(await this.isAvailable())) return null;
+    try {
+      await this.db.collection('sessions').insertOne({ ...sessionDoc });
+      return this._formatDoc(sessionDoc);
+    } catch (err) {
+      console.error('[MongoDB] createSession error:', err.message);
+      return null;
+    }
+  }
+
+  async findSessionByTokenHash(tokenHash) {
+    if (!tokenHash || !(await this.isAvailable())) return null;
+    try {
+      const doc = await this.db.collection('sessions').findOne({ tokenHash });
+      return doc ? this._formatDoc(doc) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async deleteSession(tokenHash) {
+    if (!tokenHash || !(await this.isAvailable())) return false;
+    try {
+      await this.db.collection('sessions').deleteOne({ tokenHash });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async findOrganizationById(id) {
+    if (!id || !(await this.isAvailable())) return null;
+    try {
+      const doc = await this.db.collection('organizations').findOne({ id });
+      return doc ? this._formatDoc(doc) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async createOrganization(orgDoc) {
+    if (!(await this.isAvailable())) return null;
+    try {
+      await this.db.collection('organizations').insertOne({ ...orgDoc });
+      return this._formatDoc(orgDoc);
+    } catch {
+      return null;
+    }
+  }
+
+  async findMembership(organizationId, userId) {
+    if (!organizationId || !userId || !(await this.isAvailable())) return null;
+    try {
+      const doc = await this.db.collection('memberships').findOne({ organizationId, userId });
+      return doc ? this._formatDoc(doc) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async createMembership(memDoc) {
+    if (!(await this.isAvailable())) return null;
+    try {
+      await this.db.collection('memberships').insertOne({ ...memDoc });
+      return this._formatDoc(memDoc);
+    } catch {
       return null;
     }
   }
