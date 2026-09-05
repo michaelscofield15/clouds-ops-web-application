@@ -313,8 +313,14 @@ const App = (() => {
     const txtLogin = document.getElementById('btn-google-login-text');
     const txtSignup = document.getElementById('btn-google-signup-text');
 
-    if (btnLogin) btnLogin.classList.add('loading');
-    if (btnSignup) btnSignup.classList.add('loading');
+    if (btnLogin) {
+      btnLogin.classList.add('loading');
+      btnLogin.disabled = true;
+    }
+    if (btnSignup) {
+      btnSignup.classList.add('loading');
+      btnSignup.disabled = true;
+    }
     if (txtLogin) txtLogin.textContent = 'Connecting to Google...';
     if (txtSignup) txtSignup.textContent = 'Connecting to Google...';
 
@@ -323,8 +329,14 @@ const App = (() => {
         if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
           window.location.href = '/api/auth/google';
         }
-        if (btnLogin) btnLogin.classList.remove('loading');
-        if (btnSignup) btnSignup.classList.remove('loading');
+        if (btnLogin) {
+          btnLogin.classList.remove('loading');
+          btnLogin.disabled = false;
+        }
+        if (btnSignup) {
+          btnSignup.classList.remove('loading');
+          btnSignup.disabled = false;
+        }
         if (txtLogin) txtLogin.textContent = 'Continue with Google';
         if (txtSignup) txtSignup.textContent = 'Continue with Google';
       });
@@ -334,6 +346,19 @@ const App = (() => {
   }
 
   async function authenticateWithGoogleBackend({ idToken, code }) {
+    const btnLogin = document.getElementById('btn-google-login');
+    const btnSignup = document.getElementById('btn-google-signup');
+    const txtLogin = document.getElementById('btn-google-login-text');
+    const txtSignup = document.getElementById('btn-google-signup-text');
+    if (btnLogin) {
+      btnLogin.classList.add('loading');
+      btnLogin.disabled = true;
+    }
+    if (btnSignup) {
+      btnSignup.classList.add('loading');
+      btnSignup.disabled = true;
+    }
+
     try {
       notify('Verifying Google credentials with CloudOps...', 'info');
       const res = await api('/api/auth/google', {
@@ -358,12 +383,14 @@ const App = (() => {
       setAuthAlert('signup', err.message, 'error');
       notify(`Google login failed: ${err.message}`, 'error');
     } finally {
-      const btnLogin = document.getElementById('btn-google-login');
-      const btnSignup = document.getElementById('btn-google-signup');
-      const txtLogin = document.getElementById('btn-google-login-text');
-      const txtSignup = document.getElementById('btn-google-signup-text');
-      if (btnLogin) btnLogin.classList.remove('loading');
-      if (btnSignup) btnSignup.classList.remove('loading');
+      if (btnLogin) {
+        btnLogin.classList.remove('loading');
+        btnLogin.disabled = false;
+      }
+      if (btnSignup) {
+        btnSignup.classList.remove('loading');
+        btnSignup.disabled = false;
+      }
       if (txtLogin) txtLogin.textContent = 'Continue with Google';
       if (txtSignup) txtSignup.textContent = 'Continue with Google';
     }

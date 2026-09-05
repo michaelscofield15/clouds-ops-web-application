@@ -239,13 +239,17 @@ async function runGoogleAuthTestSuite() {
   console.log(`RESULTS: ${passed} Passed, ${failed} Failed`);
   console.log('========================================================================');
 
+  await mongodbService.close();
+
   if (failed > 0) {
     process.exit(1);
   }
 }
 
 if (require.main === module) {
-  runGoogleAuthTestSuite().catch(err => {
+  runGoogleAuthTestSuite().then(() => {
+    process.exit(0);
+  }).catch(err => {
     console.error('Fatal Test Runner Error:', err);
     process.exit(1);
   });
