@@ -64,6 +64,8 @@ pipeline {
 
                     echo "Logging Docker into Amazon ECR..."
 
+                    echo "https://${ECR_REGISTRY}" | docker-credential-osxkeychain erase 2>/dev/null || true
+
                     aws ecr get-login-password \
                         --region ${AWS_REGION} | \
                     docker login \
