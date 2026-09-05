@@ -116,10 +116,14 @@ pipeline {
                 sh '''
                     set -e
 
-                    echo "Deploying image to EKS..."
+                    echo "Applying Kubernetes manifests and deploying image to EKS..."
+
+                    kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml
 
                     kubectl set image deployment/${K8S_DEPLOYMENT} \
                         ${K8S_CONTAINER}=${IMAGE_URI}
+
+                    kubectl rollout restart deployment/${K8S_DEPLOYMENT}
 
                     echo "Deployment updated."
                 '''
