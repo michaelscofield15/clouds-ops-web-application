@@ -235,6 +235,56 @@ async function runGoogleAuthTestSuite() {
     }, /Unique constraint violation/);
   });
 
+  // Test 8: 3-Day Persistent Session Lifetime Verification
+  await report('8. Session TTL is configured for 3 days (259,200,000 ms) and expiresAt is set correctly', async () => {
+    const sessionUser = {
+      id: 'usr-session-ttl-test',
+      email: 'sessionttl@example.com',
+      name: 'Session TTL User',
+      status: 'ACTIVE'
+    };
+    db.insert('users', sessionUser);
+    const session = await authService.createSession(sessionUser.id, 'org-session-ttl-test');
+    assert.ok(session.rawToken, 'Session rawToken must exist');
+    assert.ok(session.expiresAt, 'expiresAt must exist');
+
+    const expiresTime = new Date(session.expiresAt).getTime();
+    const now = Date.now();
+    const diffMs = expiresTime - now;
+    const expectedMs = 3 * 24 * 60 * 60 * 1000;
+
+    // Must be within 5 seconds of 3 days (259200000ms)
+    assert.ok(Math.abs(diffMs - expectedMs) < 5000, `Expected session TTL around ${expectedMs}ms, got ${diffMs}ms`);
+
+    // Verify session is valid
+    const authCtx = await authService.authenticateToken(session.rawToken);
+    assert.ok(authCtx, 'Session must authenticate successfully');
+    assert.strictEqual(authCtx.user.id, sessionUser.id);
+  });
+
+  // Test 9: 1024MB Upload Limit Configuration and ZIP Service Verification
+  await report('9. Configurable 1024MB (1GB) Upload Limit and ZIP Archive Validation', async () => {
+    const zipService = require('../src/services/zip.service');
+    const maxBytes = zipService.getMaxZipBytes();
+    assert.strictEqual(maxBytes, 1024 * 1024 * 1024, 'Default max upload size should be 1024MB (1GB)');
+
+    // Verify ZIP validation
+    assert.strictEqual(zipService.isValidZipBuffer(Buffer.from('not a zip')), false);
+    assert.strictEqual(zipService.isValidZipBuffer(Buffer.from([0x50, 0x4B, 0x03, 0x04])), true);
+
+    // Test rejection of oversized buffers
+    const oversizedBuffer = Buffer.alloc(10);
+    const origGetMax = zipService.getMaxZipBytes;
+    zipService.getMaxZipBytes = () => 5; // Temporarily simulate 5 byte limit
+    try {
+      assert.throws(() => {
+        zipService.extractSafely(oversizedBuffer, '/tmp/test-extract');
+      }, /exceeds maximum allowable size/);
+    } finally {
+      zipService.getMaxZipBytes = origGetMax;
+    }
+  });
+
   console.log('========================================================================');
   console.log(`RESULTS: ${passed} Passed, ${failed} Failed`);
   console.log('========================================================================');

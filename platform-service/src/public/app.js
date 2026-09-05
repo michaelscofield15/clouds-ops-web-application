@@ -34,7 +34,11 @@ const App = (() => {
     }
 
     try {
-      const res = await fetch(endpoint, { ...options, headers });
+      const res = await fetch(endpoint, {
+        ...options,
+        headers,
+        credentials: 'same-origin'
+      });
       const data = await res.json().catch(() => ({}));
 
       if (res.status === 401) {
@@ -220,9 +224,15 @@ const App = (() => {
 
   async function fetchAuthConfig() {
     try {
-      const res = await fetch('/api/auth/config').then(r => r.json());
+      const res = await fetch('/api/auth/config', { credentials: 'same-origin' }).then(r => r.json());
       if (res) {
         state.authConfig = res;
+        const uploadLimitText = document.getElementById('upload-limit-text');
+        if (uploadLimitText) {
+          const maxMb = res.maxUploadSizeMb || 1024;
+          const label = maxMb >= 1024 ? `${(maxMb / 1024).toFixed(0)}GB` : `${maxMb}MB`;
+          uploadLimitText.textContent = `Supports Node.js, Express, Fastify, Python, Go, Dockerized projects (Max ${label})`;
+        }
         if (res.googleClientId) {
           setupGoogleIdentity(res.googleClientId);
         }
@@ -426,21 +436,21 @@ const App = (() => {
     // 3. Fetch server auth configuration (Google Client ID, etc.)
     fetchAuthConfig();
 
-    // 4. Restore existing session if token exists
+    // 4. Restore existing session if token or 3-day cookie exists
     state.token = localStorage.getItem('cloudops_token') || '';
 
-    if (state.token) {
-      try {
-        const data = await api('/api/auth/me');
-        if (data && data.user) {
-          state.user = data.user;
-          state.organization = data.organization || { name: 'Active Workspace', id: 'org-active' };
-          state.role = data.membership ? data.membership.role : 'OWNER';
-          updateUserUI();
-          return;
-        }
-      } catch (err) {
-        console.warn('[CloudOps Auth] /api/auth/me validation failed:', err.message);
+    try {
+      const data = await api('/api/auth/me');
+      if (data && data.user) {
+        state.user = data.user;
+        state.organization = data.organization || { name: 'Active Workspace', id: 'org-active' };
+        state.role = data.membership ? data.membership.role : 'OWNER';
+        updateUserUI();
+        return;
+      }
+    } catch (err) {
+      if (state.token) {
+        console.warn('[CloudOps Auth] /api/auth/me session validation:', err.message);
         state.token = '';
         state.user = null;
         state.organization = null;
@@ -799,9 +809,10 @@ const App = (() => {
       return;
     }
 
-    const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50MB limit
+    const maxMb = state.authConfig?.maxUploadSizeMb || 1024;
+    const MAX_SIZE_BYTES = maxMb * 1024 * 1024;
     if (file.size > MAX_SIZE_BYTES) {
-      notify('File too large: Uploaded archive exceeds maximum allowed size of 50MB.', 'error');
+      notify(`File too large: Uploaded archive exceeds maximum allowed size of ${maxMb}MB.`, 'error');
       return;
     }
 

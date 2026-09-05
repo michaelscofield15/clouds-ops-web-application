@@ -2,11 +2,16 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const AdmZip = require('adm-zip');
+const config = require('../config');
 
-const MAX_ZIP_BYTES = 50 * 1024 * 1024; // 50MB
+const DEFAULT_MAX_ZIP_BYTES = 1024 * 1024 * 1024; // 1024MB (1GB) default
 const DANGEROUS_EXTENSIONS = ['.exe', '.dll', '.so', '.dylib', '.bat', '.cmd', '.vbs'];
 
 class ZipService {
+  getMaxZipBytes() {
+    return (config && config.maxUploadSizeBytes) || DEFAULT_MAX_ZIP_BYTES;
+  }
+
   /**
    * Calculates cryptographic SHA-256 checksum of a buffer for upload audit integrity
    */
@@ -37,8 +42,9 @@ class ZipService {
       throw new Error('Archive is empty');
     }
 
-    if (zipBuffer.length > MAX_ZIP_BYTES) {
-      throw new Error(`Archive exceeds maximum allowable size of ${MAX_ZIP_BYTES / (1024 * 1024)}MB`);
+    const maxBytes = this.getMaxZipBytes();
+    if (zipBuffer.length > maxBytes) {
+      throw new Error(`Archive exceeds maximum allowable size of ${maxBytes / (1024 * 1024)}MB`);
     }
 
     if (!this.isValidZipBuffer(zipBuffer)) {

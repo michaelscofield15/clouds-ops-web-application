@@ -1,11 +1,26 @@
 const authService = require('../services/auth/auth.service');
 const { extractToken } = require('../middleware/auth.middleware');
+const config = require('../config');
 
 class AuthController {
+  _setSessionCookie(req, res, token) {
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    res.cookie('session_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' && isHttps,
+      sameSite: 'lax',
+      maxAge: authService.getSessionTtlMs(),
+      path: '/'
+    });
+  }
+
   async signup(req, res) {
     try {
       const { email, password, name, organizationName } = req.body;
       const result = await authService.signup({ email, password, name, organizationName });
+
+      // Set 3-day persistent session cookie
+      this._setSessionCookie(req, res, result.token);
 
       res.status(201).json({
         success: true,
@@ -26,6 +41,9 @@ class AuthController {
       const { email, password, organizationId } = req.body;
       const result = await authService.login({ email, password, organizationId });
 
+      // Set 3-day persistent session cookie
+      this._setSessionCookie(req, res, result.token);
+
       res.status(200).json({
         success: true,
         message: 'Authentication successful.',
@@ -45,6 +63,7 @@ class AuthController {
       if (rawToken) {
         await authService.revokeToken(rawToken);
       }
+      res.clearCookie('session_token', { path: '/' });
       res.status(200).json({
         success: true,
         message: 'Logged out successfully. Session revoked.'
@@ -91,13 +110,8 @@ class AuthController {
 
       const result = await authService.authenticateWithGoogle({ idToken: tokenToVerify, code });
 
-      // Set secure HTTP-only session cookie
-      res.cookie('session_token', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production' && req.secure,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000
-      });
+      // Set 3-day persistent session cookie
+      this._setSessionCookie(req, res, result.token);
 
       res.status(200).json({
         success: true,
@@ -129,7 +143,7 @@ class AuthController {
 
       const crypto = require('crypto');
       const state = crypto.randomBytes(16).toString('hex');
-      res.cookie('oauth_state', state, { httpOnly: true, maxAge: 10 * 60 * 1000, sameSite: 'lax' });
+      res.cookie('oauth_state', state, { httpOnly: true, maxAge: 10 * 60 * 1000, sameSite: 'lax', path: '/' });
 
       const authUrl = googleService.getAuthorizationUrl(state);
       res.redirect(authUrl);
@@ -159,12 +173,8 @@ class AuthController {
 
       const result = await authService.authenticateWithGoogle({ code });
 
-      res.cookie('session_token', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production' && req.secure,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000
-      });
+      // Set 3-day persistent session cookie
+      this._setSessionCookie(req, res, result.token);
 
       // Redirect user to dashboard with auth handoff token
       res.redirect(`/#auth_token=${encodeURIComponent(result.token)}`);
@@ -174,14 +184,16 @@ class AuthController {
   }
 
   /**
-   * Exposes public authentication client configuration
+   * Exposes public authentication client configuration and upload limits
    * GET /api/auth/config
    */
   async getAuthConfig(req, res) {
     const googleService = require('../services/auth/google.service');
     res.status(200).json({
       googleClientId: googleService.getClientId(),
-      googleEnabled: googleService.isConfigured()
+      googleEnabled: googleService.isConfigured(),
+      maxUploadSizeMb: config.maxUploadSizeMb || 1024,
+      sessionTtlDays: authService.getSessionTtlDays()
     });
   }
 }

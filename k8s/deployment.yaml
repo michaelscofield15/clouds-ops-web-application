@@ -55,6 +55,10 @@ spec:
                   optional: true
             - name: MONGODB_DB_NAME
               value: "cloudops"
+            - name: MAX_UPLOAD_SIZE_MB
+              value: "1024"
+            - name: SESSION_TTL_DAYS
+              value: "3"
 
           livenessProbe:
             httpGet:

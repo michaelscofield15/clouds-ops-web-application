@@ -8,6 +8,8 @@ class MongoDBService {
     this.isConnecting = false;
     this.uri = config.mongodb?.uri || process.env.MONGODB_URI || '';
     this.dbName = config.mongodb?.dbName || process.env.MONGODB_DB_NAME || 'cloudops';
+    this.lastConnectAttempt = 0;
+    this.connectCooldownMs = 10000;
   }
 
   /**
@@ -28,14 +30,30 @@ class MongoDBService {
     }
 
     this.isConnecting = true;
+    this.lastConnectAttempt = Date.now();
     try {
       const { MongoClient } = require('mongodb');
       this.client = new MongoClient(this.uri, {
-        serverSelectionTimeoutMS: 3000,
-        connectTimeoutMS: 3000
+        serverSelectionTimeoutMS: 1000,
+        connectTimeoutMS: 1000,
+        socketTimeoutMS: 1000
       });
 
-      await this.client.connect();
+      const connectPromise = this.client.connect();
+      let timer;
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('MongoDB connection timeout (1200ms exceeded)')), 1200);
+      });
+
+      try {
+        await Promise.race([connectPromise, timeoutPromise]);
+        clearTimeout(timer);
+      } catch (raceErr) {
+        clearTimeout(timer);
+        connectPromise.catch(() => {});
+        throw raceErr;
+      }
+
       this.db = this.client.db(this.dbName);
       this.isConnected = true;
       this.isConnecting = false;
@@ -44,6 +62,10 @@ class MongoDBService {
       await this.ensureIndexes();
       return true;
     } catch (err) {
+      if (this.client) {
+        try { this.client.close(true).catch(() => {}); } catch (_) {}
+        this.client = null;
+      }
       this.isConnected = false;
       this.isConnecting = false;
       console.warn(`[MongoDB] Connection unavailable (${err.message}). Falling back to local document store.`);
@@ -97,7 +119,7 @@ class MongoDBService {
    */
   async isAvailable() {
     if (!this.isConnected || !this.client || !this.db) {
-      if (this.uri && !this.isConnecting) {
+      if (this.uri && !this.isConnecting && (Date.now() - this.lastConnectAttempt > this.connectCooldownMs)) {
         return await this.connect();
       }
       return false;

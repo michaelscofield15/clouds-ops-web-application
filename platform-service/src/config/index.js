@@ -23,7 +23,12 @@ const config = {
   port: parseInt(process.env.PORT, 10) || 4000,
   publicBaseUrl: (process.env.PUBLIC_BASE_URL || process.env.CLOUDOPS_PUBLIC_URL || 'http://localhost:4000').replace(/\/+$/, ''),
   nodeEnv: process.env.NODE_ENV || 'development',
-  maxUploadSizeBytes: (parseInt(process.env.MAX_UPLOAD_SIZE_MB, 10) || 50) * 1024 * 1024,
+  maxUploadSizeMb: parseInt(process.env.MAX_UPLOAD_SIZE_MB, 10) || 1024,
+  maxUploadSizeBytes: (parseInt(process.env.MAX_UPLOAD_SIZE_MB, 10) || 1024) * 1024 * 1024,
+  session: {
+    ttlDays: parseInt(process.env.SESSION_TTL_DAYS, 10) || 3,
+    ttlMs: (parseInt(process.env.SESSION_TTL_DAYS, 10) || 3) * 24 * 60 * 60 * 1000
+  },
   tempBaseDir: path.resolve(
     process.cwd(),
     process.env.TEMPORARY_DIR || 'temporary/projects'

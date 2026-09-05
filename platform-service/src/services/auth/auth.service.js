@@ -1,12 +1,26 @@
 const crypto = require('crypto');
+const config = require('../../config');
 const db = require('../db/db.service');
 const mongodbService = require('../db/mongodb.service');
 const googleService = require('./google.service');
 const auditService = require('../audit.service');
 
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DEFAULT_SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days (72 hours)
 
 class AuthService {
+  /**
+   * Retrieves the effective session time-to-live in milliseconds (3 days default)
+   */
+  getSessionTtlMs() {
+    return (config.session && config.session.ttlMs) || DEFAULT_SESSION_TTL_MS;
+  }
+
+  /**
+   * Retrieves the effective session time-to-live in days
+   */
+  getSessionTtlDays() {
+    return (config.session && config.session.ttlDays) || 3;
+  }
   /**
    * Hashes a password with a cryptographically secure random salt using scrypt
    */
@@ -400,7 +414,8 @@ class AuthService {
   async createSession(userId, organizationId) {
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = this.hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    const ttlMs = this.getSessionTtlMs();
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
     const sessionDoc = {
       tokenHash,
