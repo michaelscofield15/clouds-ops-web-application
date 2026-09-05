@@ -2,6 +2,17 @@ const authService = require('../services/auth/auth.service');
 const { extractToken } = require('../middleware/auth.middleware');
 const config = require('../config');
 
+function setSessionCookie(req, res, token) {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.cookie('session_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' && isHttps,
+    sameSite: 'lax',
+    maxAge: authService.getSessionTtlMs(),
+    path: '/'
+  });
+}
+
 class AuthController {
   constructor() {
     this.signup = this.signup.bind(this);
@@ -14,24 +25,13 @@ class AuthController {
     this.getAuthConfig = this.getAuthConfig.bind(this);
   }
 
-  _setSessionCookie(req, res, token) {
-    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
-    res.cookie('session_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production' && isHttps,
-      sameSite: 'lax',
-      maxAge: authService.getSessionTtlMs(),
-      path: '/'
-    });
-  }
-
   async signup(req, res) {
     try {
       const { email, password, name, organizationName } = req.body;
       const result = await authService.signup({ email, password, name, organizationName });
 
       // Set 3-day persistent session cookie
-      this._setSessionCookie(req, res, result.token);
+      setSessionCookie(req, res, result.token);
 
       res.status(201).json({
         success: true,
@@ -53,7 +53,7 @@ class AuthController {
       const result = await authService.login({ email, password, organizationId });
 
       // Set 3-day persistent session cookie
-      this._setSessionCookie(req, res, result.token);
+      setSessionCookie(req, res, result.token);
 
       res.status(200).json({
         success: true,
@@ -122,7 +122,7 @@ class AuthController {
       const result = await authService.authenticateWithGoogle({ idToken: tokenToVerify, code });
 
       // Set 3-day persistent session cookie
-      this._setSessionCookie(req, res, result.token);
+      setSessionCookie(req, res, result.token);
 
       res.status(200).json({
         success: true,
@@ -185,7 +185,7 @@ class AuthController {
       const result = await authService.authenticateWithGoogle({ code });
 
       // Set 3-day persistent session cookie
-      this._setSessionCookie(req, res, result.token);
+      setSessionCookie(req, res, result.token);
 
       // Redirect user to dashboard with auth handoff token
       res.redirect(`/#auth_token=${encodeURIComponent(result.token)}`);
