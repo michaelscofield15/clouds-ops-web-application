@@ -89,7 +89,9 @@ class AuthController {
 
   async getCurrentUser(req, res) {
     try {
+      const rawToken = extractToken(req);
       res.status(200).json({
+        token: rawToken,
         user: req.user,
         organization: req.organization,
         membership: req.membership

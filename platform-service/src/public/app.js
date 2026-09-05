@@ -43,7 +43,7 @@ const App = (() => {
 
       if (res.status === 401) {
         // If an authenticated endpoint rejected our token, clear stale session
-        if (!endpoint.includes('/api/auth/login') && !endpoint.includes('/api/auth/signup')) {
+        if (!endpoint.includes('/api/auth/login') && !endpoint.includes('/api/auth/signup') && !endpoint.includes('/api/auth/me')) {
           if (state.token) {
             console.warn('[CloudOps Auth] Token expired or rejected by server. Resetting session.');
             state.token = '';
@@ -445,6 +445,10 @@ const App = (() => {
         state.user = data.user;
         state.organization = data.organization || { name: 'Active Workspace', id: 'org-active' };
         state.role = data.membership ? data.membership.role : 'OWNER';
+        if (data.token) {
+          state.token = data.token;
+          localStorage.setItem('cloudops_token', data.token);
+        }
         updateUserUI();
         return;
       }
@@ -2154,7 +2158,7 @@ CMD ["npm", "start"]`;
   // =========================================================================
   // 21. Event Listeners & Initialization
   // =========================================================================
-  function init() {
+  async function init() {
     // Navigation Tabs
     document.querySelectorAll('.nav-item').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2417,8 +2421,8 @@ CMD ["npm", "start"]`;
     if (inviteBtn) inviteBtn.addEventListener('click', () => openModal('modal-invite'));
 
     initUpload();
-    initAuth();
-    loadOverviewData();
+    await initAuth();
+    await loadOverviewData();
   }
 
   return {
