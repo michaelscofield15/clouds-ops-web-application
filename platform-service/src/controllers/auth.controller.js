@@ -3,6 +3,17 @@ const { extractToken } = require('../middleware/auth.middleware');
 const config = require('../config');
 
 class AuthController {
+  constructor() {
+    this.signup = this.signup.bind(this);
+    this.login = this.login.bind(this);
+    this.logout = this.logout.bind(this);
+    this.googleAuth = this.googleAuth.bind(this);
+    this.googleRedirect = this.googleRedirect.bind(this);
+    this.googleCallback = this.googleCallback.bind(this);
+    this.getCurrentUser = this.getCurrentUser.bind(this);
+    this.getAuthConfig = this.getAuthConfig.bind(this);
+  }
+
   _setSessionCookie(req, res, token) {
     const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
     res.cookie('session_token', token, {
