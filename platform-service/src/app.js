@@ -39,9 +39,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize optional MongoDB connection in background
+// Initialize optional MongoDB connection in background and sync collections
 const mongodbService = require('./services/db/mongodb.service');
-mongodbService.connect().catch(() => {});
+const db = require('./services/db/db.service');
+mongodbService.connect().then(async (connected) => {
+  if (connected) {
+    await db.syncFromMongoDB();
+  }
+}).catch(() => {});
 
 // Serve static frontend UI
 app.use(express.static(path.join(__dirname, 'public')));

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const mongodbService = require('./mongodb.service');
 
 class DatabaseService {
   constructor(baseDirOverride) {
@@ -52,6 +53,28 @@ class DatabaseService {
         }
       }
       this.collections.set(name, map);
+    }
+  }
+
+  async syncFromMongoDB() {
+    if (!(await mongodbService.isAvailable())) return false;
+    try {
+      for (const name of this.collectionNames) {
+        const mongoDocs = await mongodbService.loadCollectionData(name);
+        if (mongoDocs && mongoDocs.length > 0) {
+          const map = this._getMap(name);
+          for (const doc of mongoDocs) {
+            if (doc && doc.id) {
+              map.set(doc.id, doc);
+            }
+          }
+          this._persistCollection(name);
+        }
+      }
+      return true;
+    } catch (err) {
+      console.warn('[DB] syncFromMongoDB warning:', err.message);
+      return false;
     }
   }
 
@@ -132,6 +155,10 @@ class DatabaseService {
     };
     map.set(id, doc);
     this._persistCollection(collectionName);
+
+    // Asynchronously persist to MongoDB if available
+    mongodbService.insertRecord(collectionName, doc).catch(() => {});
+
     return { ...doc };
   }
 
@@ -196,6 +223,10 @@ class DatabaseService {
 
     map.set(id, updated);
     this._persistCollection(collectionName);
+
+    // Asynchronously update MongoDB if available
+    mongodbService.updateRecord(collectionName, id, cleanUpdateObj(updates)).catch(() => {});
+
     return { ...updated };
   }
 
@@ -207,6 +238,10 @@ class DatabaseService {
     if (map.has(id)) {
       map.delete(id);
       this._persistCollection(collectionName);
+
+      // Asynchronously delete in MongoDB if available
+      mongodbService.deleteRecord(collectionName, id).catch(() => {});
+
       return true;
     }
     return false;
@@ -222,7 +257,7 @@ class DatabaseService {
   /**
    * Clears all collections (for test isolation)
    */
-  clearAll() {
+  async clearAll() {
     for (const name of this.collectionNames) {
       const map = this.collections.get(name);
       if (map) map.clear();
@@ -233,6 +268,15 @@ class DatabaseService {
         } catch {
           // Ignore
         }
+      }
+    }
+    if (await mongodbService.isAvailable()) {
+      try {
+        for (const name of this.collectionNames) {
+          await mongodbService.db?.collection(name).deleteMany({});
+        }
+      } catch {
+        // Ignore
       }
     }
   }
@@ -251,6 +295,12 @@ class DatabaseService {
   getLiveDeployment(projectId) {
     return this.findOne('deployments', (d) => d.projectId === projectId && d.isLive === true && d.status === 'SUCCESS');
   }
+}
+
+function cleanUpdateObj(obj) {
+  if (!obj || typeof obj !== 'object') return {};
+  const { _id, id, ...rest } = obj;
+  return rest;
 }
 
 module.exports = new DatabaseService();

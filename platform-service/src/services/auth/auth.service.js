@@ -84,7 +84,10 @@ class AuthService {
     }
 
     // Check for duplicate email
-    const existing = db.findOne('users', { email: normalizedEmail });
+    let existing = db.findOne('users', { email: normalizedEmail });
+    if (!existing && (await mongodbService.isAvailable())) {
+      existing = await mongodbService.findUserByEmail(normalizedEmail);
+    }
     if (existing) {
       throw new Error('An account with this email address already exists');
     }
@@ -94,14 +97,21 @@ class AuthService {
 
     // 1. Create User
     const userId = `usr-${crypto.randomUUID()}`;
-    const user = db.insert('users', {
+    const userDoc = {
       id: userId,
       email: normalizedEmail,
       name: displayName,
       passwordHash: hash,
       salt,
-      status: 'ACTIVE'
-    });
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    };
+    const user = db.insert('users', userDoc);
+    if (await mongodbService.isAvailable()) {
+      await mongodbService.createUser(userDoc).catch(() => {});
+    }
 
     // 2. Create Organization
     const orgId = `org-${crypto.randomUUID()}`;
@@ -149,7 +159,14 @@ class AuthService {
       throw new Error('Email and password are required');
     }
 
-    const user = db.findOne('users', { email: normalizedEmail });
+    let user = db.findOne('users', { email: normalizedEmail });
+    if (!user && (await mongodbService.isAvailable())) {
+      user = await mongodbService.findUserByEmail(normalizedEmail);
+      if (user) {
+        db._getMap('users').set(user.id, user);
+      }
+    }
+
     if (!user) {
       throw new Error('Invalid email or password');
     }
@@ -163,10 +180,21 @@ class AuthService {
       throw new Error('Account is inactive or suspended');
     }
 
+    // Update last login timestamp
+    const now = new Date().toISOString();
+    db.update('users', user.id, { lastLoginAt: now });
+    if (await mongodbService.isAvailable()) {
+      await mongodbService.updateUser(user.id, { lastLoginAt: now });
+    }
+
     // Resolve user's organization
     let targetOrgId = organizationId;
     if (!targetOrgId) {
-      const firstMembership = db.findOne('memberships', { userId: user.id });
+      let firstMembership = db.findOne('memberships', { userId: user.id });
+      if (!firstMembership && (await mongodbService.isAvailable())) {
+        const mems = await mongodbService.findRecords('memberships', { userId: user.id });
+        if (mems.length > 0) firstMembership = mems[0];
+      }
       if (firstMembership) {
         targetOrgId = firstMembership.organizationId;
       }
@@ -177,7 +205,13 @@ class AuthService {
 
     if (targetOrgId) {
       organization = db.findById('organizations', targetOrgId);
+      if (!organization && (await mongodbService.isAvailable())) {
+        organization = await mongodbService.findOrganizationById(targetOrgId);
+      }
       membership = db.findOne('memberships', { organizationId: targetOrgId, userId: user.id });
+      if (!membership && (await mongodbService.isAvailable())) {
+        membership = await mongodbService.findMembership(targetOrgId, user.id);
+      }
     }
 
     // If no org found, create a personal workspace

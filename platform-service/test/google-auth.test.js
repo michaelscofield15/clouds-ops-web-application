@@ -27,7 +27,7 @@ async function runGoogleAuthTestSuite() {
   }
 
   // Clear DB
-  db.clearAll();
+  await db.clearAll();
 
   // Test 1: Google Service Configuration & Methods
   await report('1. Google Auth Service configuration and authorization URL', async () => {
@@ -143,7 +143,7 @@ async function runGoogleAuthTestSuite() {
 
   // Test 5: Account Linking (Existing Email/Password User links Google identity)
   await report('5. Account Linking - Linking Google Identity to Existing Local Email User', async () => {
-    const existingEmail = 'localuser@example.com';
+    const existingEmail = `localuser_${Date.now()}@example.com`;
     const localSignup = await authService.signup({
       email: existingEmail,
       password: 'Password123!',
@@ -155,7 +155,7 @@ async function runGoogleAuthTestSuite() {
     const initialUserCount = db.count('users');
 
     // User signs in with Google using the same verified email
-    const googleSubForLocal = 'google-sub-local-999';
+    const googleSubForLocal = `google-sub-local-${Date.now()}`;
     const originalVerify = googleService.verifyIdToken.bind(googleService);
     googleService.verifyIdToken = async () => ({
       googleId: googleSubForLocal,

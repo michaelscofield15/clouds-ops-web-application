@@ -72,7 +72,21 @@ class MongoDBService {
       const memCol = this.db.collection('memberships');
       await memCol.createIndex({ organizationId: 1, userId: 1 });
 
-      console.log('[MongoDB] Unique indexes ensured on users, sessions, organizations, memberships');
+      const projectsCol = this.db.collection('projects');
+      await projectsCol.createIndex({ id: 1 }, { unique: true });
+      await projectsCol.createIndex({ organizationId: 1 });
+
+      const deploymentsCol = this.db.collection('deployments');
+      await deploymentsCol.createIndex({ id: 1 }, { unique: true });
+      await deploymentsCol.createIndex({ projectId: 1 });
+
+      const connectionsCol = this.db.collection('connections');
+      await connectionsCol.createIndex({ id: 1 }, { unique: true });
+
+      const auditCol = this.db.collection('audit_events');
+      await auditCol.createIndex({ id: 1 }, { unique: true });
+
+      console.log('[MongoDB] Unique and lookup indexes ensured on all collections');
     } catch (err) {
       console.warn('[MongoDB] Index creation warning:', err.message);
     }
@@ -95,6 +109,89 @@ class MongoDBService {
     } catch (err) {
       this.isConnected = false;
       return false;
+    }
+  }
+
+  /**
+   * Generic CRUD operations on any collection
+   */
+  async insertRecord(collectionName, record) {
+    if (!collectionName || !record || !(await this.isAvailable())) return null;
+    try {
+      const doc = {
+        ...record,
+        id: record.id,
+        createdAt: record.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      await this.db.collection(collectionName).updateOne(
+        { id: doc.id },
+        { $set: doc },
+        { upsert: true }
+      );
+      return this._formatDoc(doc);
+    } catch (err) {
+      console.error(`[MongoDB] insertRecord(${collectionName}) error:`, err.message);
+      return null;
+    }
+  }
+
+  async findRecordById(collectionName, id) {
+    if (!collectionName || !id || !(await this.isAvailable())) return null;
+    try {
+      const doc = await this.db.collection(collectionName).findOne({ id });
+      return doc ? this._formatDoc(doc) : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async findRecords(collectionName, query = {}) {
+    if (!collectionName || !(await this.isAvailable())) return [];
+    try {
+      const mongoQuery = typeof query === 'object' && query !== null ? query : {};
+      const docs = await this.db.collection(collectionName).find(mongoQuery).toArray();
+      return docs.map(d => this._formatDoc(d));
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async updateRecord(collectionName, id, updates) {
+    if (!collectionName || !id || !(await this.isAvailable())) return null;
+    try {
+      const { _id, id: docId, ...cleanUpdates } = updates;
+      cleanUpdates.updatedAt = new Date().toISOString();
+      const res = await this.db.collection(collectionName).findOneAndUpdate(
+        { id },
+        { $set: cleanUpdates },
+        { returnDocument: 'after' }
+      );
+      const updatedDoc = res?.value || res;
+      return updatedDoc ? this._formatDoc(updatedDoc) : null;
+    } catch (err) {
+      console.error(`[MongoDB] updateRecord(${collectionName}) error:`, err.message);
+      return null;
+    }
+  }
+
+  async deleteRecord(collectionName, id) {
+    if (!collectionName || !id || !(await this.isAvailable())) return false;
+    try {
+      await this.db.collection(collectionName).deleteOne({ id });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async loadCollectionData(collectionName) {
+    if (!collectionName || !(await this.isAvailable())) return [];
+    try {
+      const docs = await this.db.collection(collectionName).find({}).toArray();
+      return docs.map(d => this._formatDoc(d));
+    } catch {
+      return [];
     }
   }
 
@@ -189,7 +286,11 @@ class MongoDBService {
   async createSession(sessionDoc) {
     if (!(await this.isAvailable())) return null;
     try {
-      await this.db.collection('sessions').insertOne({ ...sessionDoc });
+      await this.db.collection('sessions').updateOne(
+        { tokenHash: sessionDoc.tokenHash },
+        { $set: sessionDoc },
+        { upsert: true }
+      );
       return this._formatDoc(sessionDoc);
     } catch (err) {
       console.error('[MongoDB] createSession error:', err.message);
@@ -230,7 +331,11 @@ class MongoDBService {
   async createOrganization(orgDoc) {
     if (!(await this.isAvailable())) return null;
     try {
-      await this.db.collection('organizations').insertOne({ ...orgDoc });
+      await this.db.collection('organizations').updateOne(
+        { id: orgDoc.id },
+        { $set: orgDoc },
+        { upsert: true }
+      );
       return this._formatDoc(orgDoc);
     } catch {
       return null;
@@ -250,7 +355,11 @@ class MongoDBService {
   async createMembership(memDoc) {
     if (!(await this.isAvailable())) return null;
     try {
-      await this.db.collection('memberships').insertOne({ ...memDoc });
+      await this.db.collection('memberships').updateOne(
+        { id: memDoc.id || `${memDoc.organizationId}:${memDoc.userId}` },
+        { $set: memDoc },
+        { upsert: true }
+      );
       return this._formatDoc(memDoc);
     } catch {
       return null;

@@ -1,4 +1,23 @@
+const fs = require('fs');
 const path = require('path');
+
+// Automatically load .env if present in current directory or project root
+const envPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(__dirname, '../../../.env')
+];
+for (const p of envPaths) {
+  if (fs.existsSync(p)) {
+    try {
+      if (typeof process.loadEnvFile === 'function') {
+        process.loadEnvFile(p);
+      }
+    } catch {
+      // Ignore syntax errors in .env
+    }
+  }
+}
 
 const config = {
   port: parseInt(process.env.PORT, 10) || 4000,
