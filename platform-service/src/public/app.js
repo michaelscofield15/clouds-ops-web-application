@@ -17,7 +17,8 @@ const App = (() => {
     auditLogs: [],
     members: [],
     autoHealingEnabled: true,
-    isDeploying: false
+    isDeploying: false,
+    authConfig: { googleClientId: '', googleEnabled: false }
   };
 
   // =========================================================================
@@ -175,7 +176,230 @@ const App = (() => {
   // =========================================================================
   // 4. Auth & Session Management
   // =========================================================================
+  function setAuthAlert(type, message, level = 'error') {
+    const alertEl = document.getElementById(`${type}-alert`);
+    if (!alertEl) return;
+    if (!message) {
+      alertEl.className = 'auth-alert hidden';
+      alertEl.textContent = '';
+      return;
+    }
+    alertEl.className = `auth-alert auth-alert-${level}`;
+    const icon = level === 'error' ? '⚠️' : level === 'success' ? '✅' : 'ℹ️';
+    alertEl.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+  }
+
+  function clearAuthAlerts() {
+    setAuthAlert('login', '');
+    setAuthAlert('signup', '');
+  }
+
+  function togglePasswordVisibility(inputId, btnEl) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    if (btnEl) {
+      btnEl.textContent = isPassword ? '🙈' : '👁️';
+      btnEl.title = isPassword ? 'Hide password' : 'Show password';
+      btnEl.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    }
+  }
+
+  function switchToSignup() {
+    clearAuthAlerts();
+    closeModals();
+    openModal('modal-signup');
+  }
+
+  function switchToLogin() {
+    clearAuthAlerts();
+    closeModals();
+    openModal('modal-login');
+  }
+
+  async function fetchAuthConfig() {
+    try {
+      const res = await fetch('/api/auth/config').then(r => r.json());
+      if (res) {
+        state.authConfig = res;
+        if (res.googleClientId) {
+          setupGoogleIdentity(res.googleClientId);
+        }
+      }
+    } catch (err) {
+      console.warn('[CloudOps Auth] Failed to fetch auth config:', err.message);
+    }
+  }
+
+  function setupGoogleIdentity(clientId) {
+    if (!clientId) return;
+
+    function initGIS() {
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true
+          });
+
+          // Mount Google button in containers if available
+          const loginTarget = document.getElementById('gis-button-login');
+          const signupTarget = document.getElementById('gis-button-signup');
+          if (loginTarget) {
+            window.google.accounts.id.renderButton(loginTarget, {
+              theme: 'outline',
+              size: 'large',
+              type: 'standard',
+              shape: 'rectangular',
+              text: 'continue_with',
+              logo_alignment: 'left',
+              width: 380
+            });
+            const customLoginBtn = document.getElementById('btn-google-login');
+            if (customLoginBtn) customLoginBtn.style.display = 'none';
+          }
+          if (signupTarget) {
+            window.google.accounts.id.renderButton(signupTarget, {
+              theme: 'outline',
+              size: 'large',
+              type: 'standard',
+              shape: 'rectangular',
+              text: 'signup_with',
+              logo_alignment: 'left',
+              width: 380
+            });
+            const customSignupBtn = document.getElementById('btn-google-signup');
+            if (customSignupBtn) customSignupBtn.style.display = 'none';
+          }
+        } catch (gisErr) {
+          console.warn('[CloudOps Auth] GIS init error:', gisErr.message);
+        }
+      } else {
+        setTimeout(initGIS, 500);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initGIS);
+    } else {
+      initGIS();
+    }
+  }
+
+  async function handleGoogleCredentialResponse(response) {
+    if (!response || !response.credential) {
+      notify('Google authentication was cancelled or failed.', 'error');
+      return;
+    }
+    await authenticateWithGoogleBackend({ idToken: response.credential });
+  }
+
+  async function triggerGoogleLogin() {
+    clearAuthAlerts();
+
+    if (!state.authConfig?.googleEnabled || !state.authConfig?.googleClientId) {
+      const msg = 'Google authentication requires GOOGLE_CLIENT_ID to be configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your environment.';
+      setAuthAlert('login', msg, 'info');
+      setAuthAlert('signup', msg, 'info');
+      notify(msg, 'warning');
+      return;
+    }
+
+    const btnLogin = document.getElementById('btn-google-login');
+    const btnSignup = document.getElementById('btn-google-signup');
+    const txtLogin = document.getElementById('btn-google-login-text');
+    const txtSignup = document.getElementById('btn-google-signup-text');
+
+    if (btnLogin) btnLogin.classList.add('loading');
+    if (btnSignup) btnSignup.classList.add('loading');
+    if (txtLogin) txtLogin.textContent = 'Connecting to Google...';
+    if (txtSignup) txtSignup.textContent = 'Connecting to Google...';
+
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          window.location.href = '/api/auth/google';
+        }
+        if (btnLogin) btnLogin.classList.remove('loading');
+        if (btnSignup) btnSignup.classList.remove('loading');
+        if (txtLogin) txtLogin.textContent = 'Continue with Google';
+        if (txtSignup) txtSignup.textContent = 'Continue with Google';
+      });
+    } else {
+      window.location.href = '/api/auth/google';
+    }
+  }
+
+  async function authenticateWithGoogleBackend({ idToken, code }) {
+    try {
+      notify('Verifying Google credentials with CloudOps...', 'info');
+      const res = await api('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken, code })
+      });
+
+      state.token = res.token;
+      state.user = res.user;
+      state.organization = res.organization;
+      state.role = res.role || res.membership?.role || 'OWNER';
+      localStorage.setItem('cloudops_token', res.token);
+
+      updateUserUI();
+      closeModals();
+      clearAuthAlerts();
+      notify(`Welcome, ${state.user.name || state.user.email}! Google authentication successful.`, 'success');
+      refreshActiveView(state.activeView);
+    } catch (err) {
+      console.error('[CloudOps Auth] Google authentication error:', err.message);
+      setAuthAlert('login', err.message, 'error');
+      setAuthAlert('signup', err.message, 'error');
+      notify(`Google login failed: ${err.message}`, 'error');
+    } finally {
+      const btnLogin = document.getElementById('btn-google-login');
+      const btnSignup = document.getElementById('btn-google-signup');
+      const txtLogin = document.getElementById('btn-google-login-text');
+      const txtSignup = document.getElementById('btn-google-signup-text');
+      if (btnLogin) btnLogin.classList.remove('loading');
+      if (btnSignup) btnSignup.classList.remove('loading');
+      if (txtLogin) txtLogin.textContent = 'Continue with Google';
+      if (txtSignup) txtSignup.textContent = 'Continue with Google';
+    }
+  }
+
   async function initAuth() {
+    // 1. Check URL hash for OAuth redirect token handoff (#auth_token=...)
+    if (window.location.hash && window.location.hash.includes('auth_token=')) {
+      const match = window.location.hash.match(/auth_token=([^&]+)/);
+      if (match && match[1]) {
+        const token = decodeURIComponent(match[1]);
+        localStorage.setItem('cloudops_token', token);
+        state.token = token;
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+        notify('Google authentication completed! Loading your session...', 'success');
+      }
+    }
+
+    // 2. Check query parameters for OAuth errors (?auth_error=...)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('auth_error')) {
+      const errMsg = urlParams.get('auth_error');
+      setTimeout(() => {
+        notify(`Authentication Error: ${errMsg}`, 'error');
+        openModal('modal-login');
+        setAuthAlert('login', errMsg, 'error');
+      }, 300);
+      urlParams.delete('auth_error');
+      const cleanSearch = urlParams.toString() ? `?${urlParams.toString()}` : '';
+      history.replaceState(null, '', window.location.pathname + cleanSearch + window.location.hash);
+    }
+
+    // 3. Fetch server auth configuration (Google Client ID, etc.)
+    fetchAuthConfig();
+
+    // 4. Restore existing session if token exists
     state.token = localStorage.getItem('cloudops_token') || '';
 
     if (state.token) {
@@ -219,6 +443,7 @@ const App = (() => {
     const sideRole = document.getElementById('sidebar-role-badge');
     const sideUser = document.getElementById('sidebar-user-name');
     const sideEmail = document.getElementById('sidebar-user-email');
+    const sideAvatar = document.getElementById('sidebar-user-avatar');
     const sideLogoutBtn = document.getElementById('btn-sidebar-logout');
 
     if (isAuthenticated) {
@@ -240,6 +465,14 @@ const App = (() => {
       if (sideUser) sideUser.textContent = userName;
       if (sideEmail) sideEmail.textContent = userEmail;
 
+      if (sideAvatar) {
+        if (state.user?.avatar) {
+          sideAvatar.innerHTML = `<img src="${state.user.avatar}" alt="Avatar" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" onerror="this.parentElement.textContent='👤'" />`;
+        } else {
+          sideAvatar.textContent = '👤';
+        }
+      }
+
       if (sideLogoutBtn) {
         sideLogoutBtn.innerHTML = '🚪';
         sideLogoutBtn.title = 'Sign Out';
@@ -256,6 +489,7 @@ const App = (() => {
       if (sideRole) sideRole.textContent = 'GUEST';
       if (sideUser) sideUser.textContent = 'Guest User';
       if (sideEmail) sideEmail.textContent = 'Not signed in';
+      if (sideAvatar) sideAvatar.textContent = '👤';
 
       if (sideLogoutBtn) {
         sideLogoutBtn.innerHTML = '🔑';
@@ -266,6 +500,16 @@ const App = (() => {
   }
 
   async function login(email, password) {
+    clearAuthAlerts();
+    if (!email || !email.includes('@')) {
+      setAuthAlert('login', 'Please enter a valid email address.', 'error');
+      return;
+    }
+    if (!password) {
+      setAuthAlert('login', 'Please enter your account password.', 'error');
+      return;
+    }
+
     try {
       const res = await api('/api/auth/login', {
         method: 'POST',
@@ -281,11 +525,31 @@ const App = (() => {
       notify(`Welcome back, ${state.user.name || state.user.email}! Signed in to ${state.organization.name}.`, 'success');
       refreshActiveView(state.activeView);
     } catch (err) {
+      setAuthAlert('login', err.message, 'error');
       notify(`Login failed: ${err.message}`, 'error');
+      throw err;
     }
   }
 
   async function signup(name, email, orgName, password) {
+    clearAuthAlerts();
+    if (!name || !name.trim()) {
+      setAuthAlert('signup', 'Full name is required.', 'error');
+      return;
+    }
+    if (!email || !email.includes('@')) {
+      setAuthAlert('signup', 'Please enter a valid email address.', 'error');
+      return;
+    }
+    if (!orgName || !orgName.trim()) {
+      setAuthAlert('signup', 'Organization / Tenant name is required.', 'error');
+      return;
+    }
+    if (!password || password.length < 8) {
+      setAuthAlert('signup', 'Password must be at least 8 characters long.', 'error');
+      return;
+    }
+
     try {
       const res = await api('/api/auth/signup', {
         method: 'POST',
@@ -301,7 +565,9 @@ const App = (() => {
       notify(`Organization '${state.organization.name}' created! Signed in as OWNER.`, 'success');
       refreshActiveView(state.activeView);
     } catch (err) {
+      setAuthAlert('signup', err.message, 'error');
       notify(`Signup failed: ${err.message}`, 'error');
+      throw err;
     }
   }
 
@@ -1830,10 +2096,20 @@ CMD ["npm", "start"]`;
   // =========================================================================
   function openModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+      modal.classList.remove('hidden');
+      if (modalId === 'modal-login') {
+        clearAuthAlerts();
+        setTimeout(() => document.getElementById('login-email')?.focus(), 50);
+      } else if (modalId === 'modal-signup') {
+        clearAuthAlerts();
+        setTimeout(() => document.getElementById('signup-name')?.focus(), 50);
+      }
+    }
   }
 
   function closeModals() {
+    clearAuthAlerts();
     document.querySelectorAll('.modal-overlay').forEach(el => el.classList.add('hidden'));
   }
 
@@ -2117,6 +2393,10 @@ CMD ["npm", "start"]`;
     login,
     signup,
     logout,
+    triggerGoogleLogin,
+    togglePasswordVisibility,
+    switchToSignup,
+    switchToLogin,
     openPairingModal,
     copyPairingCommand,
     setAgentInstallerOS,

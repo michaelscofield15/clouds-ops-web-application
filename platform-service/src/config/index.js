@@ -43,7 +43,16 @@ const config = {
     defaultMemoryRequest: process.env.K8S_MEM_REQUEST || '128Mi',
     defaultMemoryLimit: process.env.K8S_MEM_LIMIT || '512Mi'
   },
-  aws: require('./aws')
+  aws: require('./aws'),
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    callbackUrl: process.env.GOOGLE_CALLBACK_URL || `${(process.env.PUBLIC_BASE_URL || process.env.CLOUDOPS_PUBLIC_URL || 'http://localhost:4000').replace(/\/+$/, '')}/api/auth/google/callback`
+  },
+  mongodb: {
+    uri: process.env.MONGODB_URI || '',
+    dbName: process.env.MONGODB_DB_NAME || 'cloudops'
+  }
 };
 
 module.exports = config;

@@ -102,6 +102,26 @@ class DatabaseService {
    */
   insert(collectionName, record) {
     const map = this._getMap(collectionName);
+
+    // Enforce uniqueness constraints for users collection
+    if (collectionName === 'users') {
+      if (record.email) {
+        const normalizedEmail = String(record.email).toLowerCase();
+        for (const existing of map.values()) {
+          if (existing.id !== record.id && existing.email && existing.email.toLowerCase() === normalizedEmail) {
+            throw new Error(`Unique constraint violation: User with email '${record.email}' already exists`);
+          }
+        }
+      }
+      if (record.googleId) {
+        for (const existing of map.values()) {
+          if (existing.id !== record.id && existing.googleId === record.googleId) {
+            throw new Error(`Unique constraint violation: User with googleId '${record.googleId}' already exists`);
+          }
+        }
+      }
+    }
+
     const id = record.id || `${collectionName.slice(0, 3)}-${crypto.randomUUID()}`;
     const timestamp = new Date().toISOString();
     const doc = {

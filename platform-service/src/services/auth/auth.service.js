@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const db = require('../db/db.service');
+const mongodbService = require('../db/mongodb.service');
+const googleService = require('./google.service');
 const auditService = require('../audit.service');
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -201,6 +203,152 @@ class AuthService {
       organizationId: targetOrgId,
       userId: user.id,
       email: normalizedEmail
+    });
+
+    return {
+      user: this.sanitizeUser(user),
+      organization,
+      membership,
+      token: session.rawToken,
+      expiresAt: session.expiresAt
+    };
+  }
+
+  /**
+   * Authenticates user via Google OAuth2 / OpenID Connect ID token or auth code
+   */
+  async authenticateWithGoogle({ idToken, code }) {
+    if (!idToken && !code) {
+      throw new Error('Google authentication credential (idToken or code) is required');
+    }
+
+    // 1. Verify Google identity via official google-auth-library
+    let profile;
+    if (idToken) {
+      profile = await googleService.verifyIdToken(idToken);
+    } else {
+      profile = await googleService.exchangeCode(code);
+    }
+
+    const normalizedEmail = this.normalizeEmail(profile.email);
+    if (!normalizedEmail) {
+      throw new Error('Verified email address is required from Google account');
+    }
+
+    const now = new Date().toISOString();
+    let user = null;
+
+    // 2. Query MongoDB first (if available)
+    if (await mongodbService.isAvailable()) {
+      user = await mongodbService.findUserByGoogleId(profile.googleId);
+      if (!user) {
+        user = await mongodbService.findUserByEmail(normalizedEmail);
+      }
+    }
+
+    // 3. Check local database store (or fallback)
+    if (!user) {
+      user = db.findOne('users', { googleId: profile.googleId }) || db.findOne('users', { email: normalizedEmail });
+    }
+
+    if (user) {
+      // Existing User: Update profile and link Google identity if not already linked
+      const updates = {
+        lastLoginAt: now,
+        googleId: profile.googleId,
+        provider: user.provider || 'google',
+        emailVerified: true
+      };
+      if (profile.avatar && !user.avatar) {
+        updates.avatar = profile.avatar;
+      }
+      if (profile.name && (!user.name || user.name === user.email)) {
+        updates.name = profile.name;
+      }
+
+      // Update in MongoDB
+      if (await mongodbService.isAvailable()) {
+        const mongoUpdated = await mongodbService.updateUser(user.id, updates);
+        if (mongoUpdated) user = mongoUpdated;
+      }
+
+      // Update in local DB store
+      const localUpdated = db.update('users', user.id, updates);
+      if (localUpdated) user = { ...user, ...localUpdated };
+    } else {
+      // New User: Create in MongoDB and local store
+      const userId = `usr-${crypto.randomUUID()}`;
+      const newUserDoc = {
+        id: userId,
+        email: normalizedEmail,
+        name: profile.name || normalizedEmail.split('@')[0],
+        provider: 'google',
+        googleId: profile.googleId,
+        emailVerified: true,
+        avatar: profile.avatar || null,
+        status: 'ACTIVE',
+        createdAt: now,
+        updatedAt: now,
+        lastLoginAt: now
+      };
+
+      // Persist to MongoDB if available
+      if (await mongodbService.isAvailable()) {
+        try {
+          await mongodbService.createUser(newUserDoc);
+        } catch (mErr) {
+          console.warn('[AuthService] MongoDB insert warning:', mErr.message);
+        }
+      }
+
+      // Persist to local DB store
+      user = db.insert('users', newUserDoc);
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new Error('This account is inactive or suspended');
+    }
+
+    // 4. Resolve or Create User's Organization / Workspace
+    let targetOrgId = null;
+    const firstMembership = db.findOne('memberships', { userId: user.id });
+    if (firstMembership) {
+      targetOrgId = firstMembership.organizationId;
+    }
+
+    let organization = null;
+    let membership = null;
+
+    if (targetOrgId) {
+      organization = db.findById('organizations', targetOrgId);
+      membership = db.findOne('memberships', { organizationId: targetOrgId, userId: user.id });
+    }
+
+    if (!organization) {
+      const orgId = `org-${crypto.randomUUID()}`;
+      const orgName = `${user.name || 'Developer'}'s Workspace`;
+      organization = db.insert('organizations', {
+        id: orgId,
+        name: orgName,
+        slug: `workspace-${user.id.slice(4, 12)}`,
+        createdByUserId: user.id
+      });
+      membership = db.insert('memberships', {
+        organizationId: orgId,
+        userId: user.id,
+        role: 'OWNER'
+      });
+      targetOrgId = orgId;
+    }
+
+    // 5. Create Application Session
+    const session = await this.createSession(user.id, targetOrgId);
+
+    auditService.log('system', 'USER_GOOGLE_LOGIN', 'SUCCESS', {
+      organizationId: targetOrgId,
+      userId: user.id,
+      email: normalizedEmail,
+      googleId: profile.googleId
     });
 
     return {

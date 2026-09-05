@@ -6,6 +6,10 @@ const { authLimiter } = require('../middleware/rateLimit.middleware');
 
 router.post('/signup', authLimiter, authController.signup);
 router.post('/login', authLimiter, authController.login);
+router.post('/google', authLimiter, authController.googleAuth);
+router.get('/google', authController.googleRedirect);
+router.get('/google/callback', authController.googleCallback);
+router.get('/config', authController.getAuthConfig);
 router.post('/logout', requireAuth, authController.logout);
 router.get('/me', requireAuth, authController.getCurrentUser);
 

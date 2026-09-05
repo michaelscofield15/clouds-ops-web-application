@@ -4,17 +4,19 @@ const helmet = require('helmet');
 
 const app = express();
 
-// Security headers with relaxed CSP for local static scripts and inline handlers
+// Security headers with relaxed CSP for local static scripts, inline handlers, and Google Identity Services
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com'],
         scriptSrcAttr: ["'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:'],
+        frameSrc: ["'self'", 'https://accounts.google.com'],
+        connectSrc: ["'self'", 'https://accounts.google.com'],
+        imgSrc: ["'self'", 'data:', 'https://*.googleusercontent.com', 'https://lh3.googleusercontent.com'],
         upgradeInsecureRequests: null
       }
     }
@@ -24,6 +26,22 @@ app.use(
 // Standard parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Lightweight cookie parser
+app.use((req, res, next) => {
+  req.cookies = req.cookies || {};
+  if (req.headers.cookie) {
+    req.headers.cookie.split(';').forEach(c => {
+      const [key, ...v] = c.trim().split('=');
+      if (key) req.cookies[key] = decodeURIComponent(v.join('='));
+    });
+  }
+  next();
+});
+
+// Initialize optional MongoDB connection in background
+const mongodbService = require('./services/db/mongodb.service');
+mongodbService.connect().catch(() => {});
 
 // Serve static frontend UI
 app.use(express.static(path.join(__dirname, 'public')));

@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: cloudops-platform
-          image: 979214968440.dkr.ecr.ap-south-1.amazonaws.com/cloudops-platform:5.0
+          image: 979214968440.dkr.ecr.ap-south-1.amazonaws.com/cloudops-platform:6.0
 
           ports:
             - containerPort: 4000
